@@ -157,7 +157,7 @@ impl TryFrom<serde_json::Value> for WatchParams {
             serde_json::Value::String(s) => {
                 let s = s.trim();
                 // let mut v = s.split('@');
-                let secp = Secp256k1::new();
+                // let secp = Secp256k1::new();
                 // let descriptor = bdk::descriptor::into_wallet_descriptor(s, &secp, bitcoin::Network::Bitcoin);
                 let descriptor = s;
 
@@ -191,7 +191,7 @@ impl TryFrom<serde_json::Value> for WatchParams {
                         } else {
                             None
                         };
-                        let gap = if let Some(g) = a.get(2) {
+                        let gap = if let Some(g) = a.get(3) {
                             Some(g.as_u64().ok_or_else(|| WatchError::InvalidGap(format!("gap must be a number. Received: {g}")))? as u32)
                         } else {
                             None
@@ -199,7 +199,7 @@ impl TryFrom<serde_json::Value> for WatchParams {
 
                         WatchParams::new(descriptor, change_descriptor, birthday, gap)
                     }
-                    _ => Err(WatchError::InvalidFormat(format!("Unexpected request format. The request needs 1-3 parameters. Received: {param_count}"))),
+                    _ => Err(WatchError::InvalidFormat(format!("Unexpected request format. The request needs 1-4 parameters. Received: {param_count}"))),
                 }
             },
             serde_json::Value::Object(mut m) => {
@@ -256,18 +256,14 @@ async fn watchdescriptor(_p: Plugin<()>, v: serde_json::Value) -> Result<serde_j
     let blockchain = ElectrumBlockchain::from(client);
     // log::info!("descriptor: {:?}", v[0].as_str());
     // log::info!("change descriptor: {}", change_descriptor);
-    if let Some(cd) = params.change_descriptor {
-        cd.as_str()
-    } else {
-        ""
-    };
     let wallet = Wallet::new(
         // "tr([af4c5952/86h/0h/0h]xpub6DTzDxFnUS1vriU7fc3VkwdTnArhk6FafoZHRcfwjRqo7vkMnbAiKK9AEhR4feqcdsE36Y4ZCLHBcEszJcvV3pMLhS4D9Ed5VNhH6Cw17Pp/0/*)",
         params.descriptor.as_str(),
-        match params.change_descriptor {
-            None => None,
-            Some(cd) => Some(cd.as_str()),
-        },
+        Some(&(params.change_descriptor.unwrap())),
+        // match params.change_descriptor {
+        //     None => None,
+        //     Some(cd) => Some(cd.as_str()),
+        // },
         bitcoin::Network::Bitcoin,
         MemoryDatabase::default(),
     )?;
