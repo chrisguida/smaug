@@ -264,9 +264,9 @@ async fn watchdescriptor(_p: Plugin<()>, v: serde_json::Value) -> Result<serde_j
     let wallet = Wallet::new(
         // "tr([af4c5952/86h/0h/0h]xpub6DTzDxFnUS1vriU7fc3VkwdTnArhk6FafoZHRcfwjRqo7vkMnbAiKK9AEhR4feqcdsE36Y4ZCLHBcEszJcvV3pMLhS4D9Ed5VNhH6Cw17Pp/0/*)",
         params.descriptor.as_str(),
-        match change_descriptor {
-            "" => None,
-            _ => Some(change_descriptor),
+        match params.change_descriptor {
+            None => None,
+            Some(cd) => Some(cd.as_str()),
         },
         bitcoin::Network::Bitcoin,
         MemoryDatabase::default(),
