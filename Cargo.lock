@@ -138,19 +138,6 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "cln-plugin"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bdk",
- "cln-plugin 0.1.3",
- "log",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "cln-plugin"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb9daea6247914ed15471b2d6919f7f64354f4d6cd7e95b48ff4f553ab000f42"
@@ -976,6 +963,19 @@ name = "wasm-bindgen-shared"
 version = "0.2.84"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0046fef7e28c3804e5e38bfa31ea2a0f73905319b677e57ebe37e49358989b5d"
+
+[[package]]
+name = "watchdescriptor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bdk",
+ "cln-plugin",
+ "log",
+ "serde",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "web-sys"
