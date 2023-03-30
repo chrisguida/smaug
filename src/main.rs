@@ -225,19 +225,10 @@ async fn watchdescriptor(_p: Plugin<()>, v: serde_json::Value) -> Result<serde_j
     let blockchain = ElectrumBlockchain::from(client);
     log::info!("descriptor: {:?}", params.descriptor);
     log::info!("change descriptor: {:?}", params.change_descriptor);
-    let change_descriptor_opt = params.change_descriptor.clone();
-    let change_descriptor = if let Some(_cd) = &params.change_descriptor {
-        change_descriptor_opt.unwrap()
-    } else {
-        String::new()
-    };
     let wallet = Wallet::new(
         // "tr([af4c5952/86h/0h/0h]xpub6DTzDxFnUS1vriU7fc3VkwdTnArhk6FafoZHRcfwjRqo7vkMnbAiKK9AEhR4feqcdsE36Y4ZCLHBcEszJcvV3pMLhS4D9Ed5VNhH6Cw17Pp/0/*)",
-        params.descriptor.as_str(),
-        match params.change_descriptor {
-            None => None,
-            Some(_cd) => Some(change_descriptor.as_str()),
-        },
+        &params.descriptor,
+        params.change_descriptor.as_ref(),
         bitcoin::Network::Bitcoin,
         MemoryDatabase::default(),
     )?;
