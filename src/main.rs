@@ -5,7 +5,7 @@ use std::fmt;
 #[macro_use]
 extern crate serde_json;
 
-use cln_plugin::{anyhow, options, Builder, Error, Plugin};
+use cln_plugin::{anyhow, messages, Builder, Error, Plugin};
 use serde::Serialize;
 use tokio;
 
@@ -14,37 +14,8 @@ use bdk::database::MemoryDatabase;
 use bdk::electrum_client::Client;
 use bdk::{bitcoin, SyncOptions, Wallet};
 
-#[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
-    let state = ();
-
-    if let Some(plugin) = Builder::new(tokio::io::stdin(), tokio::io::stdout())
-        .option(options::ConfigOption::new(
-            "test-option",
-            options::Value::Integer(42),
-            "a test-option with default 42",
-        ))
-        .option(options::ConfigOption::new(
-            "opt-option",
-            options::Value::OptInteger,
-            "An optional option",
-        ))
-        .rpcmethod(
-            "watchdescriptor",
-            "Watch a wallet descriptor and emit events when coins are moved",
-            watchdescriptor,
-        )
-        .subscribe("connect", connect_handler)
-        .hook("peer_connected", peer_connected_handler)
-        .dynamic()
-        .start(state)
-        .await?
-    {
-        plugin.join().await
-    } else {
-        Ok(())
-    }
-}
+const COIN_DEPOSIT_TAG: &str = "coin_onchain_deposit";
+const COIN_SPEND_TAG: &str = "coin_onchain_spend";
 
 /// Errors related to the `watchdescriptor` command.
 #[derive(Debug)]
@@ -218,6 +189,29 @@ impl TryFrom<serde_json::Value> for WatchParams {
     }
 }
 
+#[tokio::main]
+async fn main() -> Result<(), anyhow::Error> {
+    let state = ();
+
+    if let Some(plugin) = Builder::new(tokio::io::stdin(), tokio::io::stdout())
+        .notification(messages::NotificationTopic::new(COIN_DEPOSIT_TAG))
+        .notification(messages::NotificationTopic::new(COIN_SPEND_TAG))
+        .rpcmethod(
+            "watchdescriptor",
+            "Watch a wallet descriptor and emit events when coins are moved",
+            watchdescriptor,
+        )
+        .subscribe("block_added", block_added_handler)
+        .dynamic()
+        .start(state)
+        .await?
+    {
+        plugin.join().await
+    } else {
+        Ok(())
+    }
+}
+
 async fn watchdescriptor(_p: Plugin<()>, v: serde_json::Value) -> Result<serde_json::Value, Error> {
     let params = WatchParams::try_from(v).map_err(|x| anyhow!(x))?;
     log::info!("params = {:?}", params);
@@ -241,15 +235,23 @@ async fn watchdescriptor(_p: Plugin<()>, v: serde_json::Value) -> Result<serde_j
     Ok(json!(wallet.get_balance()?))
 }
 
-async fn connect_handler(_p: Plugin<()>, v: serde_json::Value) -> Result<(), Error> {
-    log::info!("Got a connect notification: {}", v);
+async fn block_added_handler(plugin: Plugin<()>, v: serde_json::Value) -> Result<(), Error> {
+    log::info!("Got a block_added notification: {}", v);
+    let acct = "test account";
+    let transfer_from: Option<String> = None;
+    let amount = 1000;
+    let outpoint = "a18b557b03f2b2d0e25430ef75b70ff5b6bd1f4dd19da3a564502b92623cd8a5:0";
+    let onchain_deposit = json!({
+        "account": acct,
+        "transfer_from": transfer_from,
+        "outpoint": outpoint,
+        "amount_msat": amount,
+        "coin_type": "bcrt",
+        "timestamp": 1679955976,
+        "blockheight": 111,
+    });
+    plugin
+        .send_custom_notification(COIN_DEPOSIT_TAG.to_string(), onchain_deposit)
+        .await?;
     Ok(())
-}
-
-async fn peer_connected_handler(
-    _p: Plugin<()>,
-    v: serde_json::Value,
-) -> Result<serde_json::Value, Error> {
-    log::info!("Got a connect hook call: {}", v);
-    Ok(json!({"result": "continue"}))
 }
