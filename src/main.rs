@@ -4,6 +4,8 @@
 #[macro_use]
 extern crate serde_json;
 
+use std::sync::{Arc, Mutex};
+
 use watchdescriptor::params::WatchParams;
 
 use cln_plugin::{anyhow, messages, Builder, Error, Plugin};
@@ -13,31 +15,58 @@ use bdk::blockchain::ElectrumBlockchain;
 use bdk::database::MemoryDatabase;
 use bdk::electrum_client::Client;
 use bdk::{bitcoin, SyncOptions, Wallet};
+use watchdescriptor::watchdescriptor::WatchDescriptor;
 
 const COIN_DEPOSIT_TAG: &str = "coin_onchain_deposit";
 const COIN_SPEND_TAG: &str = "coin_onchain_spend";
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let state = ();
+    // let watch_descriptor = WatchDescriptor::new();
+    // let state = WatchDescriptor::new();
 
-    if let Some(plugin) = Builder::new(tokio::io::stdin(), tokio::io::stdout())
+    // if let Some(plugin) = Builder::new(tokio::io::stdin(), tokio::io::stdout())
+    let builder = Builder::new(tokio::io::stdin(), tokio::io::stdout())
         .notification(messages::NotificationTopic::new(COIN_DEPOSIT_TAG))
         .notification(messages::NotificationTopic::new(COIN_SPEND_TAG))
         .rpcmethod(
             "watchdescriptor",
-            "Watch a wallet descriptor and emit events when coins are moved",
+            "Watch one or more external wallet descriptors and emit notifications when coins are moved",
             watchdescriptor,
         )
         .subscribe("block_added", block_added_handler)
-        .dynamic()
-        .start(state)
-        .await?
-    {
-        plugin.join().await
+        .dynamic();
+    // .configure()
+    // .start(watch_descriptor.clone())
+    // .await?
+    // {
+    //     plugin.join().await
+    // } else {
+    //     Ok(())
+    // }
+
+    let midstate = if let Some(midstate) = builder.configure().await? {
+        midstate
     } else {
-        Ok(())
-    }
+        return Ok(());
+    };
+
+    // let watch_descriptor = WatchDescriptor::new().await;
+    let watch_descriptor = Arc::new(Mutex::new(WatchDescriptor::new().await));
+
+    let plugin = midstate.start(watch_descriptor.clone()).await?;
+    // tokio::spawn(async move {
+    //     RetryManager::new(
+    //         wt_client,
+    //         rx,
+    //         max_elapsed_time,
+    //         auto_retry_delay,
+    //         max_interval_time,
+    //     )
+    //     .manage_retry()
+    //     .await
+    // });
+    plugin.join().await
 }
 
 async fn watchdescriptor(_p: Plugin<()>, v: serde_json::Value) -> Result<serde_json::Value, Error> {
