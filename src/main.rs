@@ -22,11 +22,11 @@ const COIN_SPEND_TAG: &str = "coin_onchain_spend";
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    // let watch_descriptor = WatchDescriptor::new();
-    // let state = WatchDescriptor::new();
-
-    // if let Some(plugin) = Builder::new(tokio::io::stdin(), tokio::io::stdout())
-    let builder = Builder::new(tokio::io::stdin(), tokio::io::stdout())
+    let mut watch_descriptor = WatchDescriptor::new();
+    watch_descriptor.add_descriptor("tr([af4c5952/86h/0h/0h]xpub6DTzDxFnUS1vriU7fc3VkwdTnArhk6FafoZHRcfwjRqo7vkMnbAiKK9AEhR4feqcdsE36Y4ZCLHBcEszJcvV3pMLhS4D9Ed5VNhH6Cw17Pp/0/*)".to_string());
+    let plugin_state = Arc::new(Mutex::new(watch_descriptor));
+    if let Some(plugin) = Builder::new(tokio::io::stdin(), tokio::io::stdout())
+    // let builder = Builder::new(tokio::io::stdin(), tokio::io::stdout())
         .notification(messages::NotificationTopic::new(COIN_DEPOSIT_TAG))
         .notification(messages::NotificationTopic::new(COIN_SPEND_TAG))
         .rpcmethod(
@@ -35,41 +35,21 @@ async fn main() -> Result<(), anyhow::Error> {
             watchdescriptor,
         )
         .subscribe("block_added", block_added_handler)
-        .dynamic();
-    // .configure()
-    // .start(watch_descriptor.clone())
-    // .await?
-    // {
-    //     plugin.join().await
-    // } else {
-    //     Ok(())
-    // }
-
-    let midstate = if let Some(midstate) = builder.configure().await? {
-        midstate
+        .dynamic()
+        // .configure()
+        .start(plugin_state.clone())
+        .await?
+    {
+        plugin.join().await
     } else {
-        return Ok(());
-    };
-
-    // let watch_descriptor = WatchDescriptor::new().await;
-    let watch_descriptor = Arc::new(Mutex::new(WatchDescriptor::new().await));
-
-    let plugin = midstate.start(watch_descriptor.clone()).await?;
-    // tokio::spawn(async move {
-    //     RetryManager::new(
-    //         wt_client,
-    //         rx,
-    //         max_elapsed_time,
-    //         auto_retry_delay,
-    //         max_interval_time,
-    //     )
-    //     .manage_retry()
-    //     .await
-    // });
-    plugin.join().await
+        Ok(())
+    }
 }
 
-async fn watchdescriptor(_p: Plugin<()>, v: serde_json::Value) -> Result<serde_json::Value, Error> {
+async fn watchdescriptor(
+    _p: Plugin<Arc<Mutex<WatchDescriptor>>>,
+    v: serde_json::Value,
+) -> Result<serde_json::Value, Error> {
     let params = WatchParams::try_from(v).map_err(|x| anyhow!(x))?;
     log::info!("params = {:?}", params);
     let client = Client::new("ssl://electrum.blockstream.info:60002")?;
@@ -92,8 +72,15 @@ async fn watchdescriptor(_p: Plugin<()>, v: serde_json::Value) -> Result<serde_j
     Ok(json!(wallet.get_balance()?))
 }
 
-async fn block_added_handler(plugin: Plugin<()>, v: serde_json::Value) -> Result<(), Error> {
+async fn block_added_handler(
+    plugin: Plugin<Arc<Mutex<WatchDescriptor>>>,
+    v: serde_json::Value,
+) -> Result<(), Error> {
     log::info!("Got a block_added notification: {}", v);
+    log::info!(
+        "WatchDescriptor state!!! {:?}",
+        plugin.state().lock().unwrap().descriptors
+    );
     let acct = "test account";
     let transfer_from: Option<String> = None;
     let amount = 1000;
