@@ -1,3 +1,6 @@
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
 #[derive(Debug, Clone)]
 pub struct WatchDescriptor {
     /// A collection of descriptors the plugin is watching.
@@ -13,7 +16,7 @@ impl WatchDescriptor {
 
     pub fn with_descriptor() {}
 
-    pub fn add_descriptor(&mut self, descriptor: String) {
+    pub async fn add_descriptor(&mut self, descriptor: String) {
         self.descriptors.push(descriptor);
     }
 }

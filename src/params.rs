@@ -25,20 +25,20 @@ impl std::fmt::Display for WatchError {
 
 /// Parameters related to the `watchdescriptor` command.
 #[derive(Debug, Serialize)]
-pub struct WatchParams {
+pub struct DescriptorWallet {
     pub descriptor: String,
     pub change_descriptor: Option<String>,
     pub birthday: Option<u32>,
     pub gap: Option<u32>,
 }
-impl WatchParams {
+impl DescriptorWallet {
     fn new(
         descriptor: &str,
         change_descriptor: Option<&str>,
         birthday: Option<u64>,
         gap: Option<u64>,
     ) -> Result<Self, WatchError> {
-        let mut params = WatchParams::from_descriptor(descriptor)?;
+        let mut params = DescriptorWallet::from_descriptor(descriptor)?;
         if change_descriptor.is_some() {
             params = params.with_change_descriptor(change_descriptor.unwrap())?
         }
@@ -100,7 +100,7 @@ impl WatchParams {
     }
 }
 
-impl TryFrom<serde_json::Value> for WatchParams {
+impl TryFrom<serde_json::Value> for DescriptorWallet {
     type Error = WatchError;
 
     fn try_from(value: serde_json::Value) -> Result<Self, Self::Error> {
@@ -111,7 +111,7 @@ impl TryFrom<serde_json::Value> for WatchParams {
                 let param_count = a.len();
 
                 match param_count {
-                    1 => WatchParams::try_from(a.pop().unwrap()),
+                    1 => DescriptorWallet::try_from(a.pop().unwrap()),
                     2..=4 => {
                         let descriptor = a.get(0).unwrap().as_str().ok_or_else(|| WatchError::InvalidDescriptor("descriptor must be a string".to_string()))?;
                         // let change_descriptor = Some(a.get(1).unwrap().as_str().ok_or_else(|| WatchError::InvalidChangeDescriptor("change_descriptor must be a string".to_string()))?);
@@ -132,7 +132,7 @@ impl TryFrom<serde_json::Value> for WatchParams {
                             None
                         };
 
-                        WatchParams::new(descriptor, change_descriptor, birthday, gap)
+                        DescriptorWallet::new(descriptor, change_descriptor, birthday, gap)
                     }
                     _ => Err(WatchError::InvalidFormat(format!("Unexpected request format. The request needs 1-4 parameters. Received: {param_count}"))),
                 }
@@ -149,7 +149,7 @@ impl TryFrom<serde_json::Value> for WatchParams {
                  } else if !m.iter().all(|(k, _)| allowed_keys.contains(&k.as_str())) {
                     Err(WatchError::InvalidFormat(format!("Invalid named parameter found in request. Allowed named params: ['descriptor', 'change_descriptor', 'birthday', 'gap']")))
                  } else {
-                    WatchParams::new(
+                    DescriptorWallet::new(
                         m.get("descriptor").unwrap().as_str().unwrap(),
                         match m.get("change_descriptor") {
                             Some(v) => Some(v.as_str().unwrap()),
