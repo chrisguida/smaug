@@ -60,8 +60,11 @@ async fn watchdescriptor(
 ) -> Result<serde_json::Value, Error> {
     let params = DescriptorWallet::try_from(v.clone()).map_err(|x| anyhow!(x))?;
     log::info!("params = {:?}", params);
-    let mut plugin_state = plugin.state().lock().unwrap();
-    plugin_state.add_descriptor(params.descriptor).await;
+    plugin
+        .state()
+        .lock()
+        .unwrap()
+        .add_descriptor(params.descriptor);
     Ok(json!("Wallet successfully added"))
 }
 
