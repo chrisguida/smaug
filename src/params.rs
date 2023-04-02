@@ -106,13 +106,13 @@ impl TryFrom<serde_json::Value> for DescriptorWallet {
     fn try_from(value: serde_json::Value) -> Result<Self, Self::Error> {
         log::info!("entering try_from");
         match value {
-            serde_json::Value::Array(mut a) => {
+            serde_json::Value::Array(a) => {
                 log::info!("try_from: array detected = {:?}", a);
                 let param_count = a.len();
 
                 match param_count {
-                    1 => DescriptorWallet::try_from(a.pop().unwrap()),
-                    2..=4 => {
+                    // 1 => DescriptorWallet::try_from(a.pop().unwrap()),
+                    1..=4 => {
                         let descriptor = a.get(0).unwrap().as_str().ok_or_else(|| WatchError::InvalidDescriptor("descriptor must be a string".to_string()))?;
                         // let change_descriptor = Some(a.get(1).unwrap().as_str().ok_or_else(|| WatchError::InvalidChangeDescriptor("change_descriptor must be a string".to_string()))?);
                         log::info!("try_from array: change_descriptor = {:?}", a.get(1));
