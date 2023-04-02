@@ -6,7 +6,7 @@ extern crate serde_json;
 
 use std::sync::{Arc, Mutex};
 
-use watchdescriptor::params::WatchParams;
+use watchdescriptor::params::DescriptorWallet;
 
 use cln_plugin::{anyhow, messages, Builder, Error, Plugin};
 use tokio;
@@ -14,7 +14,7 @@ use tokio;
 use bdk::blockchain::ElectrumBlockchain;
 use bdk::database::MemoryDatabase;
 use bdk::electrum_client::Client;
-use bdk::{bitcoin, SyncOptions, Wallet};
+use bdk::{bitcoin, descriptor, Balance, SyncOptions, Wallet};
 use watchdescriptor::watchdescriptor::WatchDescriptor;
 
 const COIN_DEPOSIT_TAG: &str = "coin_onchain_deposit";
@@ -23,7 +23,8 @@ const COIN_SPEND_TAG: &str = "coin_onchain_spend";
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let mut watch_descriptor = WatchDescriptor::new();
-    watch_descriptor.add_descriptor("tr([af4c5952/86h/0h/0h]xpub6DTzDxFnUS1vriU7fc3VkwdTnArhk6FafoZHRcfwjRqo7vkMnbAiKK9AEhR4feqcdsE36Y4ZCLHBcEszJcvV3pMLhS4D9Ed5VNhH6Cw17Pp/0/*)".to_string());
+    // watch_descriptor.add_descriptor("tr([af4c5952/86h/0h/0h]xpub6DTzDxFnUS1vriU7fc3VkwdTnArhk6FafoZHRcfwjRqo7vkMnbAiKK9AEhR4feqcdsE36Y4ZCLHBcEszJcvV3pMLhS4D9Ed5VNhH6Cw17Pp/0/*)".to_string()).await;
+    // watch_descriptor.add_descriptor("tr([af4c5952/86h/0h/0h]xpub6DTzDxFnUS1vriU7fc3VkwdTnArhk6FafoZHRcfwjRqo7vkMnbAiKK9AEhR4feqcdsE36Y4ZCLHBcEszJcvV3pMLhS4D9Ed5VNhH6Cw17Pp/1/*)".to_string()).await;
     let plugin_state = Arc::new(Mutex::new(watch_descriptor));
     if let Some(plugin) = Builder::new(tokio::io::stdin(), tokio::io::stdout())
     // let builder = Builder::new(tokio::io::stdin(), tokio::io::stdout())
@@ -33,6 +34,11 @@ async fn main() -> Result<(), anyhow::Error> {
             "watchdescriptor",
             "Watch one or more external wallet descriptors and emit notifications when coins are moved",
             watchdescriptor,
+        )
+        .rpcmethod(
+            "listdescriptors",
+            "List descriptor wallets currently being watched",
+            listdescriptors,
         )
         .subscribe("block_added", block_added_handler)
         .dynamic()
@@ -46,41 +52,70 @@ async fn main() -> Result<(), anyhow::Error> {
     }
 }
 
+type State = Arc<Mutex<WatchDescriptor>>;
+
 async fn watchdescriptor(
-    _p: Plugin<Arc<Mutex<WatchDescriptor>>>,
+    plugin: Plugin<State>,
     v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
-    let params = WatchParams::try_from(v).map_err(|x| anyhow!(x))?;
+    let params = DescriptorWallet::try_from(v.clone()).map_err(|x| anyhow!(x))?;
     log::info!("params = {:?}", params);
-    let client = Client::new("ssl://electrum.blockstream.info:60002")?;
-    let blockchain = ElectrumBlockchain::from(client);
-    log::info!("descriptor: {:?}", params.descriptor);
-    log::info!("change descriptor: {:?}", params.change_descriptor);
-    let wallet = Wallet::new(
-        // "tr([af4c5952/86h/0h/0h]xpub6DTzDxFnUS1vriU7fc3VkwdTnArhk6FafoZHRcfwjRqo7vkMnbAiKK9AEhR4feqcdsE36Y4ZCLHBcEszJcvV3pMLhS4D9Ed5VNhH6Cw17Pp/0/*)",
-        &params.descriptor,
-        params.change_descriptor.as_ref(),
-        bitcoin::Network::Bitcoin,
-        MemoryDatabase::default(),
-    )?;
-
-    wallet.sync(&blockchain, SyncOptions::default())?;
-
-    // println!("Descriptor balance: {} SAT", wallet.get_balance()?);
-
-    // Ok(v)
-    Ok(json!(wallet.get_balance()?))
+    // let descriptors = plugin.state().lock().unwrap().descriptors;
+    let plugin_state = plugin.state().lock().unwrap();
+    for d in plugin_state.descriptors.clone() {
+        plugin.state().lock().unwrap().add_descriptor(d).await;
+    }
+    // plugin_state
+    //     .descriptors
+    //     .iter()
+    //     .map(|d| plugin_state.add_descriptor(d.to_string()));
+    Ok(json!("Wallet successfully added"))
+    // Ok(json!({ "Wallet successfully added:": v }))
+    // Ok(json!(wallet.get_balance()?))
 }
 
-async fn block_added_handler(
-    plugin: Plugin<Arc<Mutex<WatchDescriptor>>>,
-    v: serde_json::Value,
-) -> Result<(), Error> {
+async fn listdescriptors(
+    plugin: Plugin<State>,
+    _v: serde_json::Value,
+) -> Result<serde_json::Value, Error> {
+    Ok(json!(plugin.state().lock().unwrap().descriptors))
+}
+
+async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Result<(), Error> {
     log::info!("Got a block_added notification: {}", v);
     log::info!(
         "WatchDescriptor state!!! {:?}",
         plugin.state().lock().unwrap().descriptors
     );
+
+    let descriptors = plugin.state().lock().unwrap().descriptors.clone();
+
+    let client = Client::new("ssl://electrum.blockstream.info:60002")?;
+    let blockchain = ElectrumBlockchain::from(client);
+    log::info!("descriptor: {:?}", descriptors[0]);
+    log::info!("change descriptor: {:?}", descriptors[1]);
+
+    let mut balance: Balance = Balance {
+        immature: 0,
+        trusted_pending: 0,
+        untrusted_pending: 0,
+        confirmed: 0,
+    };
+    {
+        let wallet = Wallet::new(
+            // "tr([af4c5952/86h/0h/0h]xpub6DTzDxFnUS1vriU7fc3VkwdTnArhk6FafoZHRcfwjRqo7vkMnbAiKK9AEhR4feqcdsE36Y4ZCLHBcEszJcvV3pMLhS4D9Ed5VNhH6Cw17Pp/0/*)",
+            // &params.descriptor,
+            &descriptors[0],
+            // params.change_descriptor.as_ref(),
+            Some(&descriptors[1]),
+            bitcoin::Network::Bitcoin,
+            MemoryDatabase::default(),
+        )?;
+
+        wallet.sync(&blockchain, SyncOptions::default())?;
+        balance = wallet.get_balance()?;
+    }
+
     let acct = "test account";
     let transfer_from: Option<String> = None;
     let amount = 1000;
