@@ -22,7 +22,7 @@ const COIN_SPEND_TAG: &str = "coin_onchain_spend";
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let mut watch_descriptor = WatchDescriptor::new();
+    let watch_descriptor = WatchDescriptor::new();
     // watch_descriptor.add_descriptor("tr([af4c5952/86h/0h/0h]xpub6DTzDxFnUS1vriU7fc3VkwdTnArhk6FafoZHRcfwjRqo7vkMnbAiKK9AEhR4feqcdsE36Y4ZCLHBcEszJcvV3pMLhS4D9Ed5VNhH6Cw17Pp/0/*)".to_string()).await;
     // watch_descriptor.add_descriptor("tr([af4c5952/86h/0h/0h]xpub6DTzDxFnUS1vriU7fc3VkwdTnArhk6FafoZHRcfwjRqo7vkMnbAiKK9AEhR4feqcdsE36Y4ZCLHBcEszJcvV3pMLhS4D9Ed5VNhH6Cw17Pp/1/*)".to_string()).await;
     let plugin_state = Arc::new(Mutex::new(watch_descriptor));
@@ -61,9 +61,10 @@ async fn watchdescriptor(
     let params = DescriptorWallet::try_from(v.clone()).map_err(|x| anyhow!(x))?;
     log::info!("params = {:?}", params);
     // let descriptors = plugin.state().lock().unwrap().descriptors;
-    let plugin_state = plugin.state().lock().unwrap();
-    for d in plugin_state.descriptors.clone() {
-        plugin.state().lock().unwrap().add_descriptor(d).await;
+    let descriptors = plugin.state().lock().unwrap().clone().descriptors;
+    for d in descriptors {
+        let mut plugin_state = plugin.state().lock().unwrap().clone();
+        plugin_state.add_descriptor(d).await;
     }
     // plugin_state
     //     .descriptors
