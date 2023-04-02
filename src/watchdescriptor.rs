@@ -16,7 +16,7 @@ impl WatchDescriptor {
 
     pub fn with_descriptor() {}
 
-    pub async fn add_descriptor(&mut self, descriptor: String) {
+    pub fn add_descriptor(&mut self, descriptor: String) {
         self.descriptors.push(descriptor);
     }
 }
