@@ -1,22 +1,17 @@
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use bdk::Wallet;
 
-#[derive(Debug, Clone)]
-pub struct WatchDescriptor {
+#[derive(Debug)]
+pub struct WatchDescriptor<D: Clone> {
     /// A collection of descriptors the plugin is watching.
-    pub descriptors: Vec<String>,
+    pub wallets: Vec<Wallet<D>>,
 }
 
-impl WatchDescriptor {
+impl<D: Clone> WatchDescriptor<D> {
     pub fn new() -> Self {
-        Self {
-            descriptors: vec![],
-        }
+        Self { wallets: vec![] }
     }
 
-    pub fn with_descriptor() {}
-
-    pub fn add_descriptor(&mut self, descriptor: String) {
-        self.descriptors.push(descriptor);
+    pub fn add_descriptor_wallet(&mut self, wallet: Wallet<D>) {
+        self.wallets.push(wallet);
     }
 }
