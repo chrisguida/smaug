@@ -1,5 +1,6 @@
+use bdk::{bitcoin::Txid, BlockTime, TransactionDetails};
 use serde::Serialize;
-use std::fmt;
+use std::{collections::BTreeMap, fmt};
 
 /// Errors related to the `watchdescriptor` command.
 #[derive(Debug)]
@@ -30,7 +31,8 @@ pub struct DescriptorWallet {
     pub change_descriptor: Option<String>,
     pub birthday: Option<u32>,
     pub gap: Option<u32>,
-    pub last_synced_height: Option<u32>,
+    pub last_synced: Option<BlockTime>,
+    pub transactions: BTreeMap<Txid, TransactionDetails>,
 }
 impl DescriptorWallet {
     fn new(
@@ -58,7 +60,8 @@ impl DescriptorWallet {
             change_descriptor: None,
             birthday: None,
             gap: None,
-            last_synced_height: None,
+            last_synced: None,
+            transactions: BTreeMap::new(),
         })
     }
 
@@ -99,6 +102,25 @@ impl DescriptorWallet {
                 ..self
             })
         }
+    }
+
+    pub fn update_last_synced(&mut self, last_synced: BlockTime) {
+        self.last_synced = Some(last_synced);
+    }
+
+    pub fn update_transactions(
+        &mut self,
+        transactions: Vec<TransactionDetails>,
+    ) -> Vec<TransactionDetails> {
+        let mut new_txs = vec![];
+        for tx in transactions {
+            if !self.transactions.contains_key(&tx.txid) {
+                new_txs.push(tx.clone());
+                self.transactions.insert(tx.txid, tx);
+            }
+        }
+        new_txs
+        // self.transactions = transactions;
     }
 }
 

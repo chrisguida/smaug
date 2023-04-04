@@ -1,2 +1,2 @@
-pub mod params;
-pub mod watchdescriptor;
+pub mod state;
+pub mod wallet;
