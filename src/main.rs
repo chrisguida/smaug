@@ -7,16 +7,16 @@ extern crate serde_json;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 
-use watchdescriptor::params::DescriptorWallet;
+use watchdescriptor::wallet::DescriptorWallet;
 
-use cln_plugin::{anyhow, messages, Builder, Error, Plugin};
+use cln_plugin::{anyhow, messages, options, Builder, Error, Plugin};
 use tokio;
 
 use bdk::blockchain::ElectrumBlockchain;
-use bdk::database::{BatchDatabase, Database, MemoryDatabase};
+use bdk::database::{Database, MemoryDatabase};
 use bdk::electrum_client::Client;
-use bdk::{bitcoin, descriptor, Balance, SyncOptions, Wallet};
-use watchdescriptor::watchdescriptor::WatchDescriptor;
+use bdk::{bitcoin, Balance, SyncOptions, Wallet};
+use watchdescriptor::state::WatchDescriptor;
 
 const COIN_DEPOSIT_TAG: &str = "coin_onchain_deposit";
 const COIN_SPEND_TAG: &str = "coin_onchain_spend";
@@ -29,6 +29,11 @@ async fn main() -> Result<(), anyhow::Error> {
     let plugin_state = Arc::new(Mutex::new(watch_descriptor));
     if let Some(plugin) = Builder::new(tokio::io::stdin(), tokio::io::stdout())
     // let builder = Builder::new(tokio::io::stdin(), tokio::io::stdout())
+        .option(options::ConfigOption::new(
+            "network",
+            options::Value::String(bitcoin::Network::Bitcoin.to_string()),
+            "Which network to use: [bitcoin, testnet, signet, regtest]",
+        ))
         .notification(messages::NotificationTopic::new(COIN_DEPOSIT_TAG))
         .notification(messages::NotificationTopic::new(COIN_SPEND_TAG))
         .rpcmethod(
@@ -43,7 +48,6 @@ async fn main() -> Result<(), anyhow::Error> {
         )
         .subscribe("block_added", block_added_handler)
         .dynamic()
-        // .configure()
         .start(plugin_state.clone())
         .await?
     {
@@ -55,12 +59,11 @@ async fn main() -> Result<(), anyhow::Error> {
 
 type State = Arc<Mutex<WatchDescriptor>>;
 
-// fn watchdescriptor<D: Clone + Sync + Send>(
 async fn watchdescriptor(
     plugin: Plugin<State>,
     v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
-    let dw = DescriptorWallet::try_from(v.clone()).map_err(|x| anyhow!(x))?;
+    let mut dw = DescriptorWallet::try_from(v.clone()).map_err(|x| anyhow!(x))?;
     log::info!("params = {:?}", dw);
 
     let wallet = Wallet::new(
@@ -72,7 +75,6 @@ async fn watchdescriptor(
     {
         // holding onto db during later sync call causes RefCell to be carried across await causing runtime panic
         let db = wallet.database();
-        // let batch = B
         let sync_time = db.get_sync_time()?;
         match sync_time {
             Some(st) => {
@@ -94,15 +96,39 @@ async fn watchdescriptor(
     let db = wallet.database();
     if let Some(st) = db.get_sync_time()? {
         log::info!("new previous sync time: {:?}", st);
+        dw.update_last_synced(st.block_time)
     } else {
         log::info!("no previous sync time found, even after sync");
     }
 
+    let transactions = wallet.list_transactions(false)?;
+    if transactions.len() > 0 {
+        log::info!("found some transactions: {:?}", transactions);
+        let new_txs = dw.update_transactions(transactions);
+        if new_txs.len() > 0 {
+            for tx in new_txs {
+                log::info!("new tx found!: {:?}", tx);
+            }
+        } else {
+            log::info!("no new txs this time");
+        }
+    }
     plugin.state().lock().unwrap().add_descriptor_wallet(dw);
-    Ok(json!("Wallet successfully added"))
+    let messasge = format!(
+        "Wallet with checksum {} successfully added",
+        wallet.descriptor_checksum(bdk::KeychainKind::External)
+    );
+    Ok(json!(messasge))
 }
 
 async fn listdescriptors(
+    plugin: Plugin<State>,
+    _v: serde_json::Value,
+) -> Result<serde_json::Value, Error> {
+    Ok(json!(plugin.state().lock().unwrap().wallets))
+}
+
+async fn listtransactions(
     plugin: Plugin<State>,
     _v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
