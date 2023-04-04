@@ -24,12 +24,13 @@ impl std::fmt::Display for WatchError {
 }
 
 /// Parameters related to the `watchdescriptor` command.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct DescriptorWallet {
     pub descriptor: String,
     pub change_descriptor: Option<String>,
     pub birthday: Option<u32>,
     pub gap: Option<u32>,
+    pub last_synced_height: Option<u32>,
 }
 impl DescriptorWallet {
     fn new(
@@ -57,6 +58,7 @@ impl DescriptorWallet {
             change_descriptor: None,
             birthday: None,
             gap: None,
+            last_synced_height: None,
         })
     }
 

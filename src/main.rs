@@ -53,82 +53,98 @@ async fn main() -> Result<(), anyhow::Error> {
     }
 }
 
-type State<D> = Arc<Mutex<WatchDescriptor<D>>>;
+type State = Arc<Mutex<WatchDescriptor>>;
 
 // fn watchdescriptor<D: Clone + Sync + Send>(
-fn watchdescriptor<MemoryDatabase>(
-    plugin: Plugin<State<MemoryDatabase>>,
+async fn watchdescriptor(
+    plugin: Plugin<State>,
     v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
-    let params = DescriptorWallet::try_from(v.clone()).map_err(|x| anyhow!(x))?;
-    log::info!("params = {:?}", params);
+    let dw = DescriptorWallet::try_from(v.clone()).map_err(|x| anyhow!(x))?;
+    log::info!("params = {:?}", dw);
 
     let wallet = Wallet::new(
-        &params.descriptor,
-        params.change_descriptor.as_ref(),
+        &dw.descriptor,
+        dw.change_descriptor.as_ref(),
         bitcoin::Network::Testnet,
         MemoryDatabase::default(),
     )?;
+    {
+        // holding onto db during later sync call causes RefCell to be carried across await causing runtime panic
+        let db = wallet.database();
+        // let batch = B
+        let sync_time = db.get_sync_time()?;
+        match sync_time {
+            Some(st) => {
+                log::info!("found previous sync time: {:?}", st);
+            }
+            None => {
+                log::info!("no previous sync time found");
+            }
+        }
+    }
+    log::info!("creating client");
+    let client = Client::new("ssl://electrum.blockstream.info:60002")?;
+    log::info!("creating blockchain");
+    let blockchain = ElectrumBlockchain::from(client);
+    log::info!("syncing wallet");
+    wallet.sync(&blockchain, SyncOptions::default())?;
 
-    plugin.state().lock().unwrap().add_descriptor_wallet(wallet);
+    log::info!("retrieving sync time");
+    let db = wallet.database();
+    if let Some(st) = db.get_sync_time()? {
+        log::info!("new previous sync time: {:?}", st);
+    } else {
+        log::info!("no previous sync time found, even after sync");
+    }
+
+    plugin.state().lock().unwrap().add_descriptor_wallet(dw);
     Ok(json!("Wallet successfully added"))
 }
 
-fn listdescriptors(
-    plugin: Plugin<State<D>>,
+async fn listdescriptors(
+    plugin: Plugin<State>,
     _v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
-    Ok(json!(plugin.state().lock().unwrap().descriptors))
+    Ok(json!(plugin.state().lock().unwrap().wallets))
 }
 
-async fn block_added_handler<D: Send + Sync + Debug + Clone>(
-    plugin: Plugin<State<D>>,
-    v: serde_json::Value,
-) -> Result<(), Error> {
+async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Result<(), Error> {
     log::info!("Got a block_added notification: {}", v);
     log::info!(
         "WatchDescriptor state!!! {:?}",
         plugin.state().lock().unwrap().wallets
     );
 
-    let descriptors = plugin.state().lock().unwrap().wallets.clone();
-
-    let client = Client::new("ssl://electrum.blockstream.info:60002")?;
-    let blockchain = ElectrumBlockchain::from(client);
-    log::info!("descriptor: {:?}", descriptors[0]);
-    log::info!("change descriptor: {:?}", descriptors[1]);
-
-    let mut balance: Balance = Balance {
-        immature: 0,
-        trusted_pending: 0,
-        untrusted_pending: 0,
-        confirmed: 0,
-    };
     {
+        // let descriptors = plugin.state().lock().unwrap().wallets.clone();
+        let descriptors = &plugin.state().lock().unwrap().wallets;
+
+        let client = Client::new("ssl://electrum.blockstream.info:60002")?;
+        let blockchain = ElectrumBlockchain::from(client);
+        log::info!("descriptor: {:?}", descriptors[0]);
+        log::info!("change descriptor: {:?}", descriptors[1]);
+
+        let mut balance: Balance = Balance {
+            immature: 0,
+            trusted_pending: 0,
+            untrusted_pending: 0,
+            confirmed: 0,
+        };
+
         let wallet = Wallet::new(
             // "tr([af4c5952/86h/0h/0h]xpub6DTzDxFnUS1vriU7fc3VkwdTnArhk6FafoZHRcfwjRqo7vkMnbAiKK9AEhR4feqcdsE36Y4ZCLHBcEszJcvV3pMLhS4D9Ed5VNhH6Cw17Pp/0/*)",
             // "wpkh(tpubEBr4i6yk5nf5DAaJpsi9N2pPYBeJ7fZ5Z9rmN4977iYLCGco1VyjB9tvvuvYtfZzjD5A8igzgw3HeWeeKFmanHYqksqZXYXGsw5zjnj7KM9/*)",
             // &params.descriptor,
-            &descriptors[0],
+            &descriptors[0].descriptor,
             // params.change_descriptor.as_ref(),
-            Some(&descriptors[1]),
+            descriptors[1].change_descriptor.as_ref(),
             // bitcoin::Network::Bitcoin,
             bitcoin::Network::Testnet,
             MemoryDatabase::default(),
         )?;
 
-        let db = wallet.database();
-        // let batch = B
-        let sync_time = db.get_sync_time()?;
-        match sync_time {
-            Some(st) => {
-                todo!();
-            }
-            None => {}
-        }
-
-        wallet.sync(&blockchain, SyncOptions::default())?;
-        balance = wallet.get_balance()?;
+        // balance = wallet.get_balance()?;
     }
 
     let acct = "test account";
