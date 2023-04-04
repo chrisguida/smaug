@@ -1,17 +1,17 @@
-use bdk::Wallet;
+use crate::params::DescriptorWallet;
 
-#[derive(Debug)]
-pub struct WatchDescriptor<D: Clone> {
+#[derive(Debug, Clone)]
+pub struct WatchDescriptor {
     /// A collection of descriptors the plugin is watching.
-    pub wallets: Vec<Wallet<D>>,
+    pub wallets: Vec<DescriptorWallet>,
 }
 
-impl<D: Clone> WatchDescriptor<D> {
+impl WatchDescriptor {
     pub fn new() -> Self {
         Self { wallets: vec![] }
     }
 
-    pub fn add_descriptor_wallet(&mut self, wallet: Wallet<D>) {
+    pub fn add_descriptor_wallet(&mut self, wallet: DescriptorWallet) {
         self.wallets.push(wallet);
     }
 }
