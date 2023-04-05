@@ -7,6 +7,7 @@ extern crate serde_json;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 
+use anyhow::Ok;
 use watchdescriptor::wallet::DescriptorWallet;
 
 use cln_plugin::{anyhow, messages, options, Builder, Error, Plugin};
@@ -15,7 +16,7 @@ use tokio;
 use bdk::blockchain::ElectrumBlockchain;
 use bdk::database::{Database, MemoryDatabase};
 use bdk::electrum_client::Client;
-use bdk::{bitcoin, Balance, SyncOptions, Wallet};
+use bdk::{bitcoin, descriptor, Balance, SyncOptions, TransactionDetails, Wallet};
 use watchdescriptor::state::WatchDescriptor;
 
 const COIN_DEPOSIT_TAG: &str = "coin_onchain_deposit";
@@ -55,6 +56,47 @@ async fn main() -> Result<(), anyhow::Error> {
     } else {
         Ok(())
     }
+}
+
+async fn send_spend_notification(
+    plugin: &Plugin<State>,
+    tx: &TransactionDetails,
+) -> Result<(), Error> {
+    let acct = "external";
+    let transfer_from: Option<String> = None;
+    let amount = 1000;
+    let outpoint = "a18b557b03f2b2d0e25430ef75b70ff5b6bd1f4dd19da3a564502b92623cd8a5:0";
+    let onchain_deposit = json!({
+        "account": acct,
+        "transfer_from": transfer_from,
+        "outpoint": outpoint,
+        "amount_msat": amount,
+        "coin_type": "bcrt",
+        "timestamp": 1679955976,
+        "blockheight": 111,
+    });
+    plugin
+        .send_custom_notification(COIN_DEPOSIT_TAG.to_string(), onchain_deposit)
+        .await?;
+    Ok(())
+}
+
+async fn send_deposit_notification(tx: &TransactionDetails) -> Result<(), Error> {
+    Ok(())
+}
+
+async fn send_notifications_for_tx(
+    plugin: &Plugin<State>,
+    tx: TransactionDetails,
+) -> Result<(), Error> {
+    if tx.sent > 0 {
+        send_spend_notification(plugin, &tx).await?;
+    }
+
+    if tx.received > 0 {
+        send_deposit_notification(&tx).await?;
+    }
+    Ok(())
 }
 
 type State = Arc<Mutex<WatchDescriptor>>;
@@ -142,52 +184,52 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
         plugin.state().lock().unwrap().wallets
     );
 
-    {
-        // let descriptors = plugin.state().lock().unwrap().wallets.clone();
-        let descriptors = &plugin.state().lock().unwrap().wallets;
-
-        let client = Client::new("ssl://electrum.blockstream.info:60002")?;
-        let blockchain = ElectrumBlockchain::from(client);
-        log::info!("descriptor: {:?}", descriptors[0]);
-        log::info!("change descriptor: {:?}", descriptors[1]);
-
-        let mut balance: Balance = Balance {
-            immature: 0,
-            trusted_pending: 0,
-            untrusted_pending: 0,
-            confirmed: 0,
-        };
-
-        let wallet = Wallet::new(
-            // "tr([af4c5952/86h/0h/0h]xpub6DTzDxFnUS1vriU7fc3VkwdTnArhk6FafoZHRcfwjRqo7vkMnbAiKK9AEhR4feqcdsE36Y4ZCLHBcEszJcvV3pMLhS4D9Ed5VNhH6Cw17Pp/0/*)",
-            // "wpkh(tpubEBr4i6yk5nf5DAaJpsi9N2pPYBeJ7fZ5Z9rmN4977iYLCGco1VyjB9tvvuvYtfZzjD5A8igzgw3HeWeeKFmanHYqksqZXYXGsw5zjnj7KM9/*)",
-            // &params.descriptor,
-            &descriptors[0].descriptor,
-            // params.change_descriptor.as_ref(),
-            descriptors[1].change_descriptor.as_ref(),
-            // bitcoin::Network::Bitcoin,
-            bitcoin::Network::Testnet,
-            MemoryDatabase::default(),
-        )?;
-
-        // balance = wallet.get_balance()?;
+    // let descriptor_wallets = &mut plugin.state().lock().unwrap().wallets;
+    let client = Client::new("ssl://electrum.blockstream.info:60002")?;
+    let blockchain = ElectrumBlockchain::from(client);
+    let mut transactions = Vec::<TransactionDetails>::new();
+    // for dw in descriptor_wallets.iter_mut() {
+    for dw in plugin.state().lock().unwrap().wallets.iter_mut() {
+        {
+            let wallet = Wallet::new(
+                &dw.descriptor,
+                dw.change_descriptor.as_ref(),
+                // "wpkh(tpubEBr4i6yk5nf5DAaJpsi9N2pPYBeJ7fZ5Z9rmN4977iYLCGco1VyjB9tvvuvYtfZzjD5A8igzgw3HeWeeKFmanHYqksqZXYXGsw5zjnj7KM9/*)",
+                bitcoin::Network::Bitcoin,
+                // bitcoin::Network::Testnet,
+                MemoryDatabase::default(),
+            )?;
+            wallet.sync(&blockchain, SyncOptions::default())?;
+            transactions = wallet.list_transactions(false)?;
+        }
+        if transactions.len() > 0 {
+            log::info!("found some transactions: {:?}", transactions);
+            let new_txs = dw.update_transactions(transactions);
+            if new_txs.len() > 0 {
+                for tx in new_txs {
+                    send_notifications_for_tx(&plugin, tx).await?;
+                }
+            } else {
+                log::info!("no new txs this time");
+            }
+        }
     }
 
-    let acct = "test account";
-    let transfer_from: Option<String> = None;
-    let amount = 1000;
-    let outpoint = "a18b557b03f2b2d0e25430ef75b70ff5b6bd1f4dd19da3a564502b92623cd8a5:0";
-    let onchain_deposit = json!({
-        "account": acct,
-        "transfer_from": transfer_from,
-        "outpoint": outpoint,
-        "amount_msat": amount,
-        "coin_type": "bcrt",
-        "timestamp": 1679955976,
-        "blockheight": 111,
-    });
-    plugin
-        .send_custom_notification(COIN_DEPOSIT_TAG.to_string(), onchain_deposit)
-        .await?;
+    // let acct = "test account";
+    // let transfer_from: Option<String> = None;
+    // let amount = 1000;
+    // let outpoint = "a18b557b03f2b2d0e25430ef75b70ff5b6bd1f4dd19da3a564502b92623cd8a5:0";
+    // let onchain_deposit = json!({
+    //     "account": acct,
+    //     "transfer_from": transfer_from,
+    //     "outpoint": outpoint,
+    //     "amount_msat": amount,
+    //     "coin_type": "bcrt",
+    //     "timestamp": 1679955976,
+    //     "blockheight": 111,
+    // });
+    // plugin
+    //     .send_custom_notification(COIN_DEPOSIT_TAG.to_string(), onchain_deposit)
+    //     .await?;
     Ok(())
 }
