@@ -5,7 +5,8 @@
 extern crate serde_json;
 
 use std::fmt::Debug;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use anyhow::Ok;
 use watchdescriptor::wallet::DescriptorWallet;
@@ -76,12 +77,31 @@ async fn send_spend_notification(
         "blockheight": 111,
     });
     plugin
-        .send_custom_notification(COIN_DEPOSIT_TAG.to_string(), onchain_deposit)
+        .send_custom_notification(COIN_SPEND_TAG.to_string(), onchain_deposit)
         .await?;
     Ok(())
 }
 
-async fn send_deposit_notification(tx: &TransactionDetails) -> Result<(), Error> {
+async fn send_deposit_notification(
+    plugin: &Plugin<State>,
+    tx: &TransactionDetails,
+) -> Result<(), Error> {
+    let acct = "external";
+    let transfer_from: Option<String> = None;
+    let amount = 1000;
+    let outpoint = "a18b557b03f2b2d0e25430ef75b70ff5b6bd1f4dd19da3a564502b92623cd8a5:0";
+    let onchain_deposit = json!({
+        "account": acct,
+        "transfer_from": transfer_from,
+        "outpoint": outpoint,
+        "amount_msat": amount,
+        "coin_type": "bcrt",
+        "timestamp": 1679955976,
+        "blockheight": 111,
+    });
+    plugin
+        .send_custom_notification(COIN_DEPOSIT_TAG.to_string(), onchain_deposit)
+        .await?;
     Ok(())
 }
 
@@ -89,12 +109,13 @@ async fn send_notifications_for_tx(
     plugin: &Plugin<State>,
     tx: TransactionDetails,
 ) -> Result<(), Error> {
+    log::info!("sending notifs for tx: {:?}", tx);
     if tx.sent > 0 {
         send_spend_notification(plugin, &tx).await?;
     }
 
     if tx.received > 0 {
-        send_deposit_notification(&tx).await?;
+        send_deposit_notification(plugin, &tx).await?;
     }
     Ok(())
 }
@@ -108,42 +129,45 @@ async fn watchdescriptor(
     let mut dw = DescriptorWallet::try_from(v.clone()).map_err(|x| anyhow!(x))?;
     log::info!("params = {:?}", dw);
 
-    let wallet = Wallet::new(
-        &dw.descriptor,
-        dw.change_descriptor.as_ref(),
-        bitcoin::Network::Testnet,
-        MemoryDatabase::default(),
-    )?;
+    let mut transactions = Vec::<TransactionDetails>::new();
     {
+        let wallet = Wallet::new(
+            &dw.descriptor,
+            dw.change_descriptor.as_ref(),
+            bitcoin::Network::Testnet,
+            MemoryDatabase::default(),
+        )?;
         // holding onto db during later sync call causes RefCell to be carried across await causing runtime panic
-        let db = wallet.database();
-        let sync_time = db.get_sync_time()?;
-        match sync_time {
-            Some(st) => {
-                log::info!("found previous sync time: {:?}", st);
-            }
-            None => {
-                log::info!("no previous sync time found");
+        {
+            let db = wallet.database();
+            let sync_time = db.get_sync_time()?;
+            match sync_time {
+                Some(st) => {
+                    log::info!("found previous sync time: {:?}", st);
+                }
+                None => {
+                    log::info!("no previous sync time found");
+                }
             }
         }
-    }
-    log::info!("creating client");
-    let client = Client::new("ssl://electrum.blockstream.info:60002")?;
-    log::info!("creating blockchain");
-    let blockchain = ElectrumBlockchain::from(client);
-    log::info!("syncing wallet");
-    wallet.sync(&blockchain, SyncOptions::default())?;
+        log::info!("creating client");
+        let client = Client::new("ssl://electrum.blockstream.info:60002")?;
+        log::info!("creating blockchain");
+        let blockchain = ElectrumBlockchain::from(client);
+        log::info!("syncing wallet");
+        wallet.sync(&blockchain, SyncOptions::default())?;
 
-    log::info!("retrieving sync time");
-    let db = wallet.database();
-    if let Some(st) = db.get_sync_time()? {
-        log::info!("new previous sync time: {:?}", st);
-        dw.update_last_synced(st.block_time)
-    } else {
-        log::info!("no previous sync time found, even after sync");
-    }
+        log::info!("retrieving sync time");
+        let db = wallet.database();
+        if let Some(st) = db.get_sync_time()? {
+            log::info!("new previous sync time: {:?}", st);
+            dw.update_last_synced(st.block_time)
+        } else {
+            log::info!("no previous sync time found, even after sync");
+        }
 
-    let transactions = wallet.list_transactions(false)?;
+        transactions = wallet.list_transactions(false)?;
+    }
     if transactions.len() > 0 {
         log::info!("found some transactions: {:?}", transactions);
         let new_txs = dw.update_transactions(transactions);
@@ -155,10 +179,11 @@ async fn watchdescriptor(
             log::info!("no new txs this time");
         }
     }
-    plugin.state().lock().unwrap().add_descriptor_wallet(dw);
+    plugin.state().lock().await.add_descriptor_wallet(dw);
     let messasge = format!(
-        "Wallet with checksum {} successfully added",
-        wallet.descriptor_checksum(bdk::KeychainKind::External)
+        // "Wallet with checksum {} successfully added",
+        "Wallet successfully added",
+        // wallet.descriptor_checksum(bdk::KeychainKind::External)
     );
     Ok(json!(messasge))
 }
@@ -167,21 +192,21 @@ async fn listdescriptors(
     plugin: Plugin<State>,
     _v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
-    Ok(json!(plugin.state().lock().unwrap().wallets))
+    Ok(json!(plugin.state().lock().await.wallets))
 }
 
 async fn listtransactions(
     plugin: Plugin<State>,
     _v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
-    Ok(json!(plugin.state().lock().unwrap().wallets))
+    Ok(json!(plugin.state().lock().await.wallets))
 }
 
 async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Result<(), Error> {
     log::info!("Got a block_added notification: {}", v);
     log::info!(
         "WatchDescriptor state!!! {:?}",
-        plugin.state().lock().unwrap().wallets
+        plugin.state().lock().await.wallets
     );
 
     // let descriptor_wallets = &mut plugin.state().lock().unwrap().wallets;
@@ -189,14 +214,14 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
     let blockchain = ElectrumBlockchain::from(client);
     let mut transactions = Vec::<TransactionDetails>::new();
     // for dw in descriptor_wallets.iter_mut() {
-    for dw in plugin.state().lock().unwrap().wallets.iter_mut() {
+    for dw in plugin.state().lock().await.wallets.iter_mut() {
         {
             let wallet = Wallet::new(
                 &dw.descriptor,
                 dw.change_descriptor.as_ref(),
                 // "wpkh(tpubEBr4i6yk5nf5DAaJpsi9N2pPYBeJ7fZ5Z9rmN4977iYLCGco1VyjB9tvvuvYtfZzjD5A8igzgw3HeWeeKFmanHYqksqZXYXGsw5zjnj7KM9/*)",
-                bitcoin::Network::Bitcoin,
-                // bitcoin::Network::Testnet,
+                // bitcoin::Network::Bitcoin,
+                bitcoin::Network::Testnet,
                 MemoryDatabase::default(),
             )?;
             wallet.sync(&blockchain, SyncOptions::default())?;
@@ -204,14 +229,17 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
         }
         if transactions.len() > 0 {
             log::info!("found some transactions: {:?}", transactions);
-            let new_txs = dw.update_transactions(transactions);
-            if new_txs.len() > 0 {
-                for tx in new_txs {
-                    send_notifications_for_tx(&plugin, tx).await?;
-                }
-            } else {
-                log::info!("no new txs this time");
+            for tx in transactions {
+                send_notifications_for_tx(&plugin, tx).await?;
             }
+            // let new_txs = dw.update_transactions(transactions);
+            // if new_txs.len() > 0 {
+            //     for tx in new_txs {
+            //         send_notifications_for_tx(&plugin, tx).await?;
+            //     }
+            // } else {
+            //     log::info!("no new txs this time");
+            // }
         }
     }
 
