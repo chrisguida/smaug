@@ -139,6 +139,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 [[package]]
 name = "cln-plugin"
 version = "0.1.2"
+source = "git+https://github.com/chrisguida/lightning?branch=feat/cln-plugin-send-notifs#9675463c2923ed87a7222d3d8400976497d33a1f"
 dependencies = [
  "anyhow",
  "bytes",
