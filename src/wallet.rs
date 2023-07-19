@@ -1,4 +1,4 @@
-use bdk::{bitcoin::Txid, BlockTime, TransactionDetails};
+use bdk::{bitcoin::Txid, TransactionDetails};
 use serde::Serialize;
 use std::{collections::BTreeMap, fmt};
 
@@ -31,7 +31,7 @@ pub struct DescriptorWallet {
     pub change_descriptor: Option<String>,
     pub birthday: Option<u32>,
     pub gap: Option<u32>,
-    pub last_synced: Option<BlockTime>,
+    // pub last_synced: Option<BlockTime>,
     pub transactions: BTreeMap<Txid, TransactionDetails>,
 }
 impl DescriptorWallet {
@@ -60,7 +60,7 @@ impl DescriptorWallet {
             change_descriptor: None,
             birthday: None,
             gap: None,
-            last_synced: None,
+            // last_synced: None,
             transactions: BTreeMap::new(),
         })
     }
@@ -104,9 +104,9 @@ impl DescriptorWallet {
         }
     }
 
-    pub fn update_last_synced(&mut self, last_synced: BlockTime) {
-        self.last_synced = Some(last_synced);
-    }
+    // pub fn update_last_synced(&mut self, last_synced: BlockTime) {
+    //     self.last_synced = Some(last_synced);
+    // }
 
     pub fn update_transactions(
         &mut self,
