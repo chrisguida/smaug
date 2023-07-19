@@ -14,9 +14,9 @@ cln-plugin = { git = "https://github.com/chrisguida/lightning", version = "0.1.2
 # cln-plugin = { path = "../../lightning/plugins" }
 # bdk = "0.27.1"
 # bdk = { version = "0.28", default-features=false, features = ["std", "key-value-db","async-interface", "use-esplora-async"] }
-bdk = { git = "https://github.com/bitcoindevkit/bdk", version = "1.0.0-alpha.0" }
-bdk_esplora = { git = "https://github.com/bitcoindevkit/bdk", features = ["async-https"] }
-bdk_file_store = { git = "https://github.com/bitcoindevkit/bdk" }
+bdk = { git = "https://github.com/bitcoindevkit/bdk", version = "1.0.0-alpha.1" }
+bdk_esplora = { version = "0.3.0", features = ["async-https"] }
+bdk_file_store = { version = "0.2.0" }
 
 [dependencies.tokio]
 features = ["net", "rt-multi-thread"]
