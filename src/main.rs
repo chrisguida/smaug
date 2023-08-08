@@ -328,8 +328,9 @@ async fn watchdescriptor(
     plugin: Plugin<State>,
     v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
+    log::info!("HELLO watchdescriptor");
     let db_path = std::env::temp_dir().join("bdk-esplora-async-example");
-    let db = Store::<bdk::wallet::ChangeSet>::new_from_path(DB_MAGIC.as_bytes(), db_path)?;
+    let db = Store::<'_, bdk::wallet::ChangeSet>::new_from_path(DB_MAGIC.as_bytes(), db_path)?;
     let external_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/0/*)";
     let internal_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/1/*)";
 
@@ -341,12 +342,13 @@ async fn watchdescriptor(
     )?;
 
     let address = wallet.get_address(AddressIndex::New);
-    println!("Generated Address: {}", address);
+    // println!("Generated Address: {}", address);
+    log::info!("Generated Address: {}", address);
 
     let balance = wallet.get_balance();
-    println!("Wallet balance before syncing: {} sats", balance.total());
+    log::info!("Wallet balance before syncing: {} sats", balance.total());
 
-    print!("Syncing...");
+    log::info!("Syncing...");
     let client =
             // esplora_client::Builder::new("https://blockstream.info/testnet/api").build_async()?;
             esplora_client::Builder::new("https://mutinynet.com/api").build_async()?;
@@ -360,32 +362,39 @@ async fn watchdescriptor(
             let mut stdout = std::io::stdout();
             let k_spks = k_spks
                 .inspect(move |(spk_i, _)| match once.take() {
-                    Some(_) => print!("\nScanning keychain [{:?}]", k),
-                    None => print!(" {:<3}", spk_i),
+                    Some(_) => log::info!("\nScanning keychain [{:?}]", k),
+                    None => log::info!(" {:<3}", spk_i),
                 })
                 .inspect(move |_| stdout.flush().expect("must flush"));
             (k, k_spks)
         })
         .collect();
-    let update = client
-        .scan(
-            local_chain,
-            keychain_spks,
-            [],
-            [],
-            STOP_GAP,
-            PARALLEL_REQUESTS,
-        )
-        .await?;
-    println!();
+    let handle = tokio::runtime::Handle::try_current()?;
+    let update = std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                handle.block_on(client.scan(
+                    local_chain,
+                    keychain_spks,
+                    [],
+                    [],
+                    STOP_GAP,
+                    PARALLEL_REQUESTS,
+                ))
+            })
+            .join()
+        // join() only returns an Err if scan panicked.
+    })
+    .expect("Propagating scan() panic")?;
+    // log::info!();
     wallet.apply_update(update)?;
     wallet.commit()?;
 
     let balance = wallet.get_balance();
-    println!("Wallet balance after syncing: {} sats", balance.total());
+    log::info!("Wallet balance after syncing: {} sats", balance.total());
 
     if balance.total() < SEND_AMOUNT {
-        println!(
+        log::info!(
             "Please send at least {} sats to the receiving address",
             SEND_AMOUNT
         );
@@ -407,7 +416,7 @@ async fn watchdescriptor(
 
     let tx = psbt.extract_tx();
     client.broadcast(&tx).await?;
-    println!("Tx broadcasted! Txid: {}", tx.txid());
+    log::info!("Tx broadcasted! Txid: {}", tx.txid());
     Ok(json!("Wallet sucessfully added"))
     // Ok(())
 }
@@ -416,6 +425,7 @@ async fn listdescriptors(
     plugin: Plugin<State>,
     _v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
+    log::info!("HELLO LISTDESCRIPTORS");
     Ok(json!(plugin.state().lock().await.wallets))
 }
 
