@@ -147,47 +147,56 @@ async fn send_deposit_notification<'a>(
     match tx.transaction.clone() {
         Some(t) => {
             for (vout, output) in t.output.iter().enumerate() {
-                if wallet.is_mine(&output.script_pubkey) {
-                    match tx.confirmation_time {
-                        ConfirmationTime::Unconfirmed { .. } => {
-                            continue;
-                        }
-                        ConfirmationTime::Confirmed { height, time } => {
-                            let acct = format!(
+                match tx.confirmation_time {
+                    ConfirmationTime::Unconfirmed { .. } => {
+                        continue;
+                    }
+                    ConfirmationTime::Confirmed { height, time } => {
+                        let acct: String;
+                        let transfer_from: String;
+                        if wallet.is_mine(&output.script_pubkey) {
+                            acct = format!(
                                 "watchdescriptor:{}",
                                 wallet.descriptor_checksum(bdk::KeychainKind::External)
                             );
-                            let amount = output.value;
-                            let outpoint = format!("{}:{}", tx.txid.to_string(), vout.to_string());
-                            log::info!(
-                                "outpoint = {}",
-                                format!("{}:{}", tx.txid.to_string(), vout.to_string())
+                            transfer_from = "external".to_owned();
+                        } else {
+                            transfer_from = format!(
+                                "watchdescriptor:{}",
+                                wallet.descriptor_checksum(bdk::KeychainKind::External)
                             );
-                            let transfer_from = "external";
-                            let onchain_deposit = json!({
-                                    "account": acct,
-                                    "transfer_from": transfer_from,
-                                    "outpoint": outpoint,
-                                    "spending_txid": tx.txid.to_string(),
-                                    "amount_msat": amount,
-                                    "coin_type": "bcrt",
-                                    "timestamp": format!("{}", time),
-                                    "blockheight": format!("{}", height),
-                            });
-                            log::info!("INSIDE SEND DEPOSIT NOTIFICATION ON WATCHDESCRIPTOR SIDE");
-                            let cloned_plugin = plugin.clone();
-                            tokio::spawn(async move {
-                                if let Err(e) = cloned_plugin
-                                    .send_custom_notification(
-                                        UTXO_DEPOSIT_TAG.to_string(),
-                                        onchain_deposit,
-                                    )
-                                    .await
-                                {
-                                    log::error!("Error sending custom notification: {:?}", e);
-                                }
-                            });
+                            acct = "external".to_owned();
                         }
+
+                        let amount = output.value;
+                        let outpoint = format!("{}:{}", tx.txid.to_string(), vout.to_string());
+                        log::info!(
+                            "outpoint = {}",
+                            format!("{}:{}", tx.txid.to_string(), vout.to_string())
+                        );
+                        let onchain_deposit = json!({
+                                "account": acct,
+                                "transfer_from": transfer_from,
+                                "outpoint": outpoint,
+                                "spending_txid": tx.txid.to_string(),
+                                "amount_msat": amount,
+                                "coin_type": "bcrt",
+                                "timestamp": format!("{}", time),
+                                "blockheight": format!("{}", height),
+                        });
+                        log::info!("INSIDE SEND DEPOSIT NOTIFICATION ON WATCHDESCRIPTOR SIDE");
+                        let cloned_plugin = plugin.clone();
+                        tokio::spawn(async move {
+                            if let Err(e) = cloned_plugin
+                                .send_custom_notification(
+                                    UTXO_DEPOSIT_TAG.to_string(),
+                                    onchain_deposit,
+                                )
+                                .await
+                            {
+                                log::error!("Error sending custom notification: {:?}", e);
+                            }
+                        });
                     }
                 }
             }
