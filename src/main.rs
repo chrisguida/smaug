@@ -217,7 +217,9 @@ async fn send_notifications_for_tx<'a>(
     Ok(())
 }
 
-async fn fetch_wallet<'a>(dw: &DescriptorWallet) -> Result<Wallet<Store<'a, LocalChangeSet<KeychainKind, ConfirmationTimeAnchor>>>, Error> {
+async fn fetch_wallet<'a>(
+    dw: &DescriptorWallet,
+) -> Result<Wallet<Store<'a, LocalChangeSet<KeychainKind, ConfirmationTimeAnchor>>>, Error> {
     let db_path = std::env::temp_dir().join("bdk-esplora-async-example");
     let db = Store::<bdk::wallet::ChangeSet>::new_from_path(DB_MAGIC.as_bytes(), db_path)?;
     // let external_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/0/*)";
@@ -229,11 +231,11 @@ async fn fetch_wallet<'a>(dw: &DescriptorWallet) -> Result<Wallet<Store<'a, Loca
 
     // let external_descriptor = mutinynet_descriptor_ext;
     // let internal_descriptor = mutinynet_descriptor_int;
-    let external_descriptor = &dw.descriptor;
-    let internal_descriptor = &dw.change_descriptor;
+    let external_descriptor = dw.descriptor.clone();
+    let internal_descriptor = dw.change_descriptor.clone();
     log::info!("about to create wallet");
     let mut wallet = Wallet::new(
-        external_descriptor,
+        &external_descriptor,
         internal_descriptor.as_ref(),
         db,
         Network::Testnet,
