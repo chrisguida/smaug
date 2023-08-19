@@ -217,8 +217,7 @@ async fn send_notifications_for_tx<'a>(
     Ok(())
 }
 
-async fn fetch_wallet<'a>(
-) -> Result<Wallet<Store<'a, LocalChangeSet<KeychainKind, ConfirmationTimeAnchor>>>, Error> {
+async fn fetch_wallet<'a>(dw: &DescriptorWallet) -> Result<Wallet<Store<'a, LocalChangeSet<KeychainKind, ConfirmationTimeAnchor>>>, Error> {
     let db_path = std::env::temp_dir().join("bdk-esplora-async-example");
     let db = Store::<bdk::wallet::ChangeSet>::new_from_path(DB_MAGIC.as_bytes(), db_path)?;
     // let external_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/0/*)";
@@ -228,11 +227,14 @@ async fn fetch_wallet<'a>(
     // let external_descriptor = "wpkh(tpubEBr4i6yk5nf5DAaJpsi9N2pPYBeJ7fZ5Z9rmN4977iYLCGco1VyjB9tvvuvYtfZzjD5A8igzgw3HeWeeKFmanHYqksqZXYXGsw5zjnj7KM9/*)";
     // let internal_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/1/*)";
 
-    let external_descriptor = mutinynet_descriptor_ext;
-    let internal_descriptor = mutinynet_descriptor_int;
+    // let external_descriptor = mutinynet_descriptor_ext;
+    // let internal_descriptor = mutinynet_descriptor_int;
+    let external_descriptor = &dw.descriptor;
+    let internal_descriptor = &dw.change_descriptor;
+    log::info!("about to create wallet");
     let mut wallet = Wallet::new(
         external_descriptor,
-        Some(internal_descriptor),
+        internal_descriptor.as_ref(),
         db,
         Network::Testnet,
     )?;
@@ -291,7 +293,7 @@ async fn watchdescriptor<'a>(
     let mut dw = DescriptorWallet::try_from(v.clone()).map_err(|x| anyhow!(x))?;
     log::info!("params = {:?}", dw);
 
-    let wallet = fetch_wallet().await?;
+    let wallet = fetch_wallet(&dw).await?;
 
     // transactions = wallet.list_transactions(false)?;
     let bdk_transactions_iter = wallet.transactions();
@@ -345,7 +347,7 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
 
     let descriptor_wallets = &mut plugin.state().lock().await.wallets;
     for dw in descriptor_wallets.iter_mut() {
-        let wallet = fetch_wallet().await?;
+        let wallet = fetch_wallet(&dw).await?;
         let bdk_transactions_iter = wallet.transactions();
         let mut transactions = Vec::<TransactionDetails>::new();
         for bdk_transaction in bdk_transactions_iter {
