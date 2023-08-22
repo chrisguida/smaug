@@ -84,14 +84,16 @@ async fn main() -> Result<(), anyhow::Error> {
     }
 }
 
-async fn send_spend_notification<'a>(
+// assume we own all inputs, ie sent from our wallet. all inputs and outputs should generate coin movement bookkeeper events
+async fn spend_tx_notify<'a>(
     plugin: &Plugin<State>,
     wallet: &Wallet<Store<'a, LocalChangeSet<KeychainKind, ConfirmationTimeAnchor>>>,
     tx: &TransactionDetails,
 ) -> Result<(), Error> {
     match tx.transaction.clone() {
         Some(t) => {
-            for (vin, input) in t.input.iter().enumerate() {
+            // send spent notification for each input
+            for input in t.input.iter() {
                 if let Some(po) = wallet.tx_graph().get_txout(input.previous_output) {
                     match tx.confirmation_time {
                         ConfirmationTime::Unconfirmed { .. } => {
@@ -129,6 +131,63 @@ async fn send_spend_notification<'a>(
                             });
                         }
                     }
+                } else {
+                    log::info!("Transaction prevout not found");
+                }
+            }
+
+            // send deposit notification for every output, since all of them are spends from our wallet
+            for (vout, output) in t.output.iter().enumerate() {
+                match tx.confirmation_time {
+                    ConfirmationTime::Unconfirmed { .. } => {
+                        continue;
+                    }
+                    ConfirmationTime::Confirmed { height, time } => {
+                        let acct: String;
+                        let transfer_from: String;
+                        if wallet.is_mine(&output.script_pubkey) {
+                            acct = format!(
+                                "watchdescriptor:{}",
+                                wallet.descriptor_checksum(bdk::KeychainKind::External)
+                            );
+                            transfer_from = "external".to_owned();
+                        } else {
+                            transfer_from = format!(
+                                "watchdescriptor:{}",
+                                wallet.descriptor_checksum(bdk::KeychainKind::External)
+                            );
+                            acct = "external".to_owned();
+                        }
+                        let amount = output.value;
+                        let outpoint = format!("{}:{}", tx.txid.to_string(), vout.to_string());
+                        log::info!(
+                            "outpoint = {}",
+                            format!("{}:{}", tx.txid.to_string(), vout.to_string())
+                        );
+                        let onchain_deposit = json!({
+                                "account": acct,
+                                "transfer_from": transfer_from,
+                                "outpoint": outpoint,
+                                "spending_txid": tx.txid.to_string(),
+                                "amount_msat": amount,
+                                "coin_type": "bcrt",
+                                "timestamp": format!("{}", time),
+                                "blockheight": format!("{}", height),
+                        });
+                        log::info!("INSIDE SEND DEPOSIT NOTIFICATION ON WATCHDESCRIPTOR SIDE");
+                        let cloned_plugin = plugin.clone();
+                        tokio::spawn(async move {
+                            if let Err(e) = cloned_plugin
+                                .send_custom_notification(
+                                    UTXO_DEPOSIT_TAG.to_string(),
+                                    onchain_deposit,
+                                )
+                                .await
+                            {
+                                log::error!("Error sending custom notification: {:?}", e);
+                            }
+                        });
+                    }
                 }
             }
         }
@@ -139,7 +198,10 @@ async fn send_spend_notification<'a>(
     Ok(())
 }
 
-async fn send_deposit_notification<'a>(
+// assume we own no inputs. sent to us from someone else's wallet.
+// all outputs we own should generate utxo deposit events.
+// outputs we don't own should not generate events.
+async fn receive_tx_notify<'a>(
     plugin: &Plugin<State>,
     wallet: &Wallet<Store<'a, LocalChangeSet<KeychainKind, ConfirmationTimeAnchor>>>,
     tx: &TransactionDetails,
@@ -153,17 +215,28 @@ async fn send_deposit_notification<'a>(
                             continue;
                         }
                         ConfirmationTime::Confirmed { height, time } => {
-                            let acct = format!(
-                                "watchdescriptor:{}",
-                                wallet.descriptor_checksum(bdk::KeychainKind::External)
-                            );
+                            let acct: String;
+                            let transfer_from: String;
+                            if wallet.is_mine(&output.script_pubkey) {
+                                acct = format!(
+                                    "watchdescriptor:{}",
+                                    wallet.descriptor_checksum(bdk::KeychainKind::External)
+                                );
+                                transfer_from = "external".to_owned();
+                            } else {
+                                // transfer_from = format!(
+                                //     "watchdescriptor:{}",
+                                //     wallet.descriptor_checksum(bdk::KeychainKind::External)
+                                // );
+                                // acct = "external".to_owned();
+                                continue;
+                            }
                             let amount = output.value;
                             let outpoint = format!("{}:{}", tx.txid.to_string(), vout.to_string());
                             log::info!(
                                 "outpoint = {}",
                                 format!("{}:{}", tx.txid.to_string(), vout.to_string())
                             );
-                            let transfer_from = "external";
                             let onchain_deposit = json!({
                                     "account": acct,
                                     "transfer_from": transfer_from,
@@ -199,21 +272,75 @@ async fn send_deposit_notification<'a>(
     Ok(())
 }
 
+// assume we own some inputs and not others. this tx was generated collaboratively between our wallet and (an)other wallet(s). request manual intervention.
+async fn shared_tx_notify<'a>(
+    plugin: &Plugin<State>,
+    wallet: &Wallet<Store<'a, LocalChangeSet<KeychainKind, ConfirmationTimeAnchor>>>,
+    tx: &TransactionDetails,
+) -> Result<(), Error> {
+    log::error!("Error: shared txs not implemented");
+    Ok(())
+}
+
 async fn send_notifications_for_tx<'a>(
     plugin: &Plugin<State>,
     wallet: &Wallet<Store<'a, LocalChangeSet<KeychainKind, ConfirmationTimeAnchor>>>,
     tx: TransactionDetails,
 ) -> Result<(), Error> {
-    log::info!("sending notifs for tx: {:?}", tx);
-    if tx.sent > 0 {
+    log::info!("sending notifs for txid/tx: {:?} {:?}", tx.txid, tx);
+    // we own all inputs
+    if tx.clone().transaction.unwrap().input.iter().all(|x| {
+        match wallet.tx_graph().get_txout(x.previous_output) {
+            Some(o) => {
+                log::info!(
+                    "output is mine?: {:?} {:?}",
+                    o,
+                    wallet.is_mine(&o.script_pubkey)
+                );
+                wallet.is_mine(&o.script_pubkey)
+            }
+            None => {
+                log::info!("output not found in tx graph: {:?}", x.previous_output);
+                false
+            }
+        }
+    }) {
         log::info!("sending spend notif");
-        send_spend_notification(plugin, wallet, &tx).await?;
+        spend_tx_notify(plugin, wallet, &tx).await?;
+    } else
+    // we own no inputs
+    if !tx.clone().transaction.unwrap().input.iter().any(|x| {
+        match wallet.tx_graph().get_txout(x.previous_output) {
+            Some(o) => {
+                log::info!(
+                    "output is mine?: {:?} {:?}",
+                    o,
+                    wallet.is_mine(&o.script_pubkey)
+                );
+                wallet.is_mine(&o.script_pubkey)
+            }
+            None => {
+                log::info!("output not found in tx graph: {:?}", x.previous_output);
+                false
+            }
+        }
+    }) {
+        log::info!("sending deposit notif");
+        receive_tx_notify(plugin, wallet, &tx).await?;
+    }
+    // we own some inputs but not others
+    else {
+        log::info!("sending shared notif");
+        shared_tx_notify(plugin, wallet, &tx).await?;
     }
 
-    if tx.received > 0 {
-        log::info!("sending deposit notif");
-        send_deposit_notification(plugin, wallet, &tx).await?;
-    }
+    // if tx.sent > 0 {
+
+    // }
+
+    // if tx.received > 0 {
+
+    // }
     Ok(())
 }
 
@@ -250,7 +377,7 @@ async fn fetch_wallet<'a>(
     log::info!("Syncing...");
     let client =
         // esplora_client::Builder::new("https://blockstream.info/testnet/api").build_async()?;
-    esplora_client::Builder::new("https://mutinynet.com/api").build_async()?;
+        esplora_client::Builder::new("https://mutinynet.com/api").build_async()?;
 
     let local_chain = wallet.checkpoints();
     let keychain_spks = wallet
