@@ -19,7 +19,11 @@ impl WatchDescriptor {
         }
     }
 
-    pub fn add_descriptor_wallet(&mut self, wallet: DescriptorWallet) {
-        self.wallets.insert(wallet.descriptor.clone(), wallet);
+    pub fn add_descriptor_wallet(
+        &mut self,
+        wallet: &DescriptorWallet,
+    ) -> Result<(), anyhow::Error> {
+        self.wallets.insert(wallet.get_name()?, wallet.clone());
+        Ok(())
     }
 }
