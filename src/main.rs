@@ -9,6 +9,8 @@ use bdk::chain::keychain::LocalChangeSet;
 use bdk::chain::{ConfirmationTime, ConfirmationTimeAnchor};
 use bdk_esplora::{esplora_client, EsploraAsyncExt};
 use bdk_file_store::Store;
+use home::home_dir;
+use std::fs;
 use std::io::Write;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -25,17 +27,33 @@ use watchdescriptor::state::WatchDescriptor;
 const UTXO_DEPOSIT_TAG: &str = "utxo_deposit";
 const UTXO_SPENT_TAG: &str = "utxo_spent";
 
-const DB_MAGIC: &str = "bdk_wallet_esplora_async_example";
+const DATADIR: &str = ".watchdescriptor";
+const DB_FILE: &str = "bdk.db";
+const WALLETS_FILE: &str = "wallets.json";
 const STOP_GAP: usize = 50;
 const PARALLEL_REQUESTS: usize = 5;
 
 // #[tokio::main]
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), anyhow::Error> {
-    let watch_descriptor = WatchDescriptor::new();
+    // Create data dir if it does not exist
+    fs::create_dir_all(&home_dir().unwrap().join(DATADIR)).unwrap_or_else(|e| {
+        log::error!("Cannot create data dir: {e:?}");
+        std::process::exit(1);
+    });
+    // let watch_descriptor = WatchDescriptor::new();
+    let mut watch_descriptor = WatchDescriptor {
+        // wallets: vec![],
+        wallets: serde_json::from_reader(fs::File::open(
+            home_dir().unwrap().join(DATADIR).join(WALLETS_FILE),
+        )?)?,
+        // network: bitcoin::Network::Bitcoin,
+        // network: cln_network.parse::<bitcoin::Network>().unwrap(),
+        network: bitcoin::Network::Bitcoin,
+    };
     // // watch_descriptor.add_descriptor("tr([af4c5952/86h/0h/0h]xpub6DTzDxFnUS1vriU7fc3VkwdTnArhk6FafoZHRcfwjRqo7vkMnbAiKK9AEhR4feqcdsE36Y4ZCLHBcEszJcvV3pMLhS4D9Ed5VNhH6Cw17Pp/0/*)".to_string()).await;
     // // watch_descriptor.add_descriptor("tr([af4c5952/86h/0h/0h]xpub6DTzDxFnUS1vriU7fc3VkwdTnArhk6FafoZHRcfwjRqo7vkMnbAiKK9AEhR4feqcdsE36Y4ZCLHBcEszJcvV3pMLhS4D9Ed5VNhH6Cw17Pp/1/*)".to_string()).await;
-    let plugin_state = Arc::new(Mutex::new(watch_descriptor));
+    let plugin_state = Arc::new(Mutex::new(watch_descriptor.clone()));
     if let Some(plugin) = Builder::new(tokio::io::stdin(), tokio::io::stdout())
     // if let Some(midstate) = Builder::new(tokio::io::stdin(), tokio::io::stdout())
     // let builder = Builder::new(tokio::io::stdin(), tokio::io::stdout())
@@ -70,11 +88,13 @@ async fn main() -> Result<(), anyhow::Error> {
         log::info!("Configuration from CLN main daemon: {:?}", plugin.configuration());
         // let cln_network = midstate.configuration().network;
         let cln_network = plugin.configuration().network;
-        let watch_descriptor = WatchDescriptor{
-            wallets: vec![],
-            // network: bitcoin::Network::Bitcoin,
-            network: cln_network.parse::<bitcoin::Network>().unwrap(),
-        };
+        plugin_state.lock().await.network = cln_network.parse::<bitcoin::Network>().unwrap();
+        // let watch_descriptor = WatchDescriptor{
+        //     // wallets: vec![],
+        //     wallets: serde_json::from_reader(fs::File::open(home_dir().unwrap().join(DATADIR).join(WALLETS_FILE))?)?,
+        //     // network: bitcoin::Network::Bitcoin,
+        //     network: cln_network.parse::<bitcoin::Network>().unwrap(),
+        // };
         log::info!("Initial Plugin State: {:?}", watch_descriptor);
         // let plugin_state = Arc::new(Mutex::new(watch_descriptor));
         // let plugin = midstate.start(plugin_state).await?;
@@ -458,8 +478,9 @@ async fn send_notifications_for_tx<'a>(
 async fn fetch_wallet<'a>(
     dw: &DescriptorWallet,
 ) -> Result<Wallet<Store<'a, LocalChangeSet<KeychainKind, ConfirmationTimeAnchor>>>, Error> {
-    let db_path = std::env::temp_dir().join("bdk-esplora-async-example");
-    let db = Store::<bdk::wallet::ChangeSet>::new_from_path(DB_MAGIC.as_bytes(), db_path)?;
+    // let db_path = std::env::temp_dir().join("bdk-esplora-async-example");
+    let db_path = home_dir().unwrap().join(DATADIR).join(DB_FILE);
+    let db = Store::<bdk::wallet::ChangeSet>::new_from_path(DATADIR.as_bytes(), db_path)?;
     // let external_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/0/*)";
     // mutinynet_descriptor = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/*)"
     let mutinynet_descriptor_ext = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/0/*)";
@@ -560,21 +581,24 @@ async fn watchdescriptor<'a>(
     }
     log::info!("waiting for wallet lock");
     plugin.state().lock().await.add_descriptor_wallet(dw);
+
+    let data = json!(plugin.state().lock().await.wallets).to_string();
+    fs::write(home_dir().unwrap().join(DATADIR).join(WALLETS_FILE), data)
+        .expect("Unable to write file");
     log::info!("wallet added");
-    let messasge = format!(
+    let message = format!(
         "Wallet with checksum {} successfully added",
         // "Wallet successfully added",
         wallet.descriptor_checksum(bdk::KeychainKind::External)
     );
     log::info!("returning");
-    Ok(json!(messasge))
+    Ok(json!(message))
 }
 
 async fn listdescriptors(
     plugin: Plugin<State>,
     _v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
-    log::info!("HELLO LISTDESCRIPTORS");
     Ok(json!(plugin.state().lock().await.wallets))
 }
 

@@ -23,6 +23,7 @@ bdk_esplora = { git = "https://github.com/bitcoindevkit/bdk", rev = "8f38e96e454
 # bdk_file_store = { version = "0.2.0" }
 # bdk_file_store = { path = "../bdk/crates/file_store" }
 bdk_file_store ={ git = "https://github.com/bitcoindevkit/bdk", rev = "8f38e96e4542db2378e2e64cd9289638ee86ba1a" }
+home = "0.5.5"
 
 [dependencies.tokio]
 features = ["net", "rt-multi-thread"]

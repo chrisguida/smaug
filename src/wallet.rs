@@ -1,5 +1,5 @@
 use bdk::{bitcoin::Txid, TransactionDetails};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt};
 
 /// Errors related to the `watchdescriptor` command.
@@ -25,13 +25,14 @@ impl std::fmt::Display for WatchError {
 }
 
 /// Parameters related to the `watchdescriptor` command.
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct DescriptorWallet {
     pub descriptor: String,
     pub change_descriptor: Option<String>,
     pub birthday: Option<u32>,
     pub gap: Option<u32>,
     // pub last_synced: Option<BlockTime>,
+    // #[serde(skip_serializing, skip_deserializing)]
     pub transactions: BTreeMap<Txid, TransactionDetails>,
 }
 impl DescriptorWallet {
