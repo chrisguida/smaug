@@ -4,9 +4,13 @@
 #[macro_use]
 extern crate serde_json;
 
+use base64::{engine::general_purpose, Engine as _};
+use bdk::bitcoin::secp256k1::{All, Secp256k1};
 use bdk::bitcoin::Network;
 use bdk::chain::keychain::LocalChangeSet;
 use bdk::chain::{ConfirmationTime, ConfirmationTimeAnchor};
+use bdk::descriptor::calc_checksum;
+use bdk::wallet::wallet_name_from_descriptor;
 use bdk_esplora::{esplora_client, EsploraAsyncExt};
 use bdk_file_store::Store;
 use cln_rpc::model::DatastoreMode;
@@ -15,6 +19,7 @@ use cln_rpc::{
     ClnRpc, Request, Response,
 };
 use home::home_dir;
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -34,8 +39,6 @@ const UTXO_DEPOSIT_TAG: &str = "utxo_deposit";
 const UTXO_SPENT_TAG: &str = "utxo_spent";
 
 const DATADIR: &str = ".watchdescriptor";
-const DB_FILE: &str = "bdk.db";
-const WALLETS_FILE: &str = "wallets.json";
 const STOP_GAP: usize = 50;
 const PARALLEL_REQUESTS: usize = 5;
 
@@ -106,9 +109,9 @@ async fn main() -> Result<(), anyhow::Error> {
         }))
         .await
         .map_err(|e| anyhow!("Error calling listdatastore: {:?}", e))?;
-    let wallets: Vec<DescriptorWallet> = match lds_response {
+    let wallets: BTreeMap<String, DescriptorWallet> = match lds_response {
         Response::ListDatastore(r) => match r.datastore.is_empty() {
-            true => vec![],
+            true => BTreeMap::new(),
             false => match &r.datastore[0].string {
                 Some(deserialized) => match serde_json::from_str(&deserialized) {
                     core::result::Result::Ok(dws) => dws,
@@ -117,7 +120,7 @@ async fn main() -> Result<(), anyhow::Error> {
                         return Err(e.into());
                     }
                 },
-                None => vec![],
+                None => BTreeMap::new(),
             },
         },
         _ => panic!(),
@@ -512,10 +515,25 @@ async fn send_notifications_for_tx<'a>(
 
 async fn fetch_wallet<'a>(
     dw: &DescriptorWallet,
+    network: Network,
 ) -> Result<Wallet<Store<'a, LocalChangeSet<KeychainKind, ConfirmationTimeAnchor>>>, Error> {
     // let db_path = std::env::temp_dir().join("bdk-esplora-async-example");
-    let db_path = home_dir().unwrap().join(DATADIR).join(DB_FILE);
+    log::info!("creating path");
+    // let db_filename: String = general_purpose::STANDARD_NO_PAD.encode(dw.descriptor.as_bytes());
+    // let db_filename: String = calc_checksum(&dw.descriptor)?;
+    let db_filename: String = wallet_name_from_descriptor(
+        &dw.descriptor,
+        dw.change_descriptor.as_ref(),
+        network,
+        &Secp256k1::<All>::new(),
+    )?;
+    let db_path = home_dir()
+        .unwrap()
+        .join(DATADIR)
+        .join(format!("{}.db", db_filename,));
+    log::info!("searching for path: {:?}", db_path);
     let db = Store::<bdk::wallet::ChangeSet>::new_from_path(DATADIR.as_bytes(), db_path)?;
+    log::info!("db created!");
     // let external_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/0/*)";
     // mutinynet_descriptor = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/*)"
     let mutinynet_descriptor_ext = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/0/*)";
@@ -596,7 +614,15 @@ async fn watchdescriptor<'a>(
     let mut dw = DescriptorWallet::try_from(v.clone()).map_err(|x| anyhow!(x))?;
     log::info!("params = {:?}", dw);
 
-    let wallet = fetch_wallet(&dw).await?;
+    let wallet = fetch_wallet(
+        &dw,
+        plugin
+            .configuration()
+            .network
+            .parse::<bitcoin::Network>()
+            .unwrap(),
+    )
+    .await?;
 
     // transactions = wallet.list_transactions(false)?;
     let bdk_transactions_iter = wallet.transactions();
@@ -682,8 +708,16 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
     );
 
     let descriptor_wallets = &mut plugin.state().lock().await.wallets;
-    for dw in descriptor_wallets.iter_mut() {
-        let wallet = fetch_wallet(&dw).await?;
+    for (_dw_desc, dw) in descriptor_wallets.iter_mut() {
+        let wallet = fetch_wallet(
+            &dw,
+            plugin
+                .configuration()
+                .network
+                .parse::<bitcoin::Network>()
+                .unwrap(),
+        )
+        .await?;
         let bdk_transactions_iter = wallet.transactions();
         let mut transactions = Vec::<TransactionDetails>::new();
         for bdk_transaction in bdk_transactions_iter {

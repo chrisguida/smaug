@@ -1509,6 +1509,7 @@ name = "watchdescriptor"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.21.2",
  "bdk",
  "bdk_esplora",
  "bdk_file_store",
