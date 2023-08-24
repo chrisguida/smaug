@@ -4,9 +4,9 @@
 #[macro_use]
 extern crate serde_json;
 
+use bdk::bitcoin::Network;
 use bdk::chain::keychain::LocalChangeSet;
 use bdk::chain::{ConfirmationTime, ConfirmationTimeAnchor};
-
 
 use bdk_file_store::Store;
 use cln_rpc::model::DatastoreMode;
@@ -15,6 +15,7 @@ use cln_rpc::{
     ClnRpc, Request, Response,
 };
 use home::home_dir;
+use serde::{Deserialize, Serialize};
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -571,11 +572,34 @@ async fn watchdescriptor<'a>(
     Ok(json!(message))
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+struct ListDescriptorsResponseWallet {
+    pub descriptor: String,
+    pub change_descriptor: Option<String>,
+    pub birthday: Option<u32>,
+    pub gap: Option<u32>,
+    pub network: Option<Network>,
+}
+
 async fn listdescriptors(
     plugin: Plugin<State>,
     _v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
-    Ok(json!(plugin.state().lock().await.wallets))
+    let wallets = &plugin.state().lock().await.wallets;
+    let mut result = BTreeMap::<String, ListDescriptorsResponseWallet>::new();
+    for (wallet_name, wallet) in wallets {
+        result.insert(
+            wallet_name.clone(),
+            ListDescriptorsResponseWallet {
+                descriptor: wallet.descriptor.clone(),
+                change_descriptor: wallet.change_descriptor.clone(),
+                birthday: wallet.birthday.clone(),
+                gap: wallet.gap.clone(),
+                network: wallet.network.clone(),
+            },
+        );
+    }
+    Ok(json!(result))
 }
 
 async fn deletedescriptor(
@@ -593,14 +617,28 @@ async fn deletedescriptor(
         _ => return Err(anyhow!("can't parse args")),
     };
     let wallets = &mut plugin.state().lock().await.wallets;
-    let removed_item: Option<DescriptorWallet>;
+    let _removed_item: Option<DescriptorWallet>;
     if wallets.contains_key(&descriptor_name) {
-        removed_item = wallets.remove(&descriptor_name);
+        _removed_item = wallets.remove(&descriptor_name);
+        let rpc_file = plugin.configuration().rpc_file;
+        let p = Path::new(&rpc_file);
+
+        let mut rpc = ClnRpc::new(p).await?;
+        let _ds_response = rpc
+            .call(Request::Datastore(DatastoreRequest {
+                key: vec!["watchdescriptor".to_owned()],
+                string: Some(json!(wallets).to_string()),
+                hex: None,
+                mode: Some(DatastoreMode::CREATE_OR_REPLACE),
+                generation: None,
+            }))
+            .await
+            .map_err(|e| anyhow!("Error calling listdatastore: {:?}", e))?;
     } else {
         return Err(anyhow!("can't find wallet {}", descriptor_name));
     }
 
-    Ok(json!(removed_item))
+    Ok(json!(format!("Deleted wallet: {}", descriptor_name)))
 }
 
 async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Result<(), Error> {
