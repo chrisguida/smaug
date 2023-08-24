@@ -35,6 +35,19 @@ use watchdescriptor::state::WatchDescriptor;
 const UTXO_DEPOSIT_TAG: &str = "utxo_deposit";
 const UTXO_SPENT_TAG: &str = "utxo_spent";
 
+const MAINNET_GENESIS_HASH: &str =
+    "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
+const TESTNET_GENESIS_HASH: &str =
+    "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943";
+const REGTEST_GENESIS_HASH: &str =
+    "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206";
+const SIGNET_GENESIS_HASH: &str =
+    "00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6";
+const INQUISITION_BLOCK_1_HASH: &str =
+    "00000086d6b2636cb2a392d45edc4ec544a10024d30141c9adf4bfd9de533b53";
+const MUTINYNET_BLOCK_1_HASH: &str =
+    "000002855893a0a9b24eaffc5efc770558a326fee4fc10c9da22fc19cd2954f9";
+
 // #[tokio::main]
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), anyhow::Error> {
