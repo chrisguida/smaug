@@ -7,14 +7,24 @@ extern crate serde_json;
 use bdk::bitcoin::Network;
 use bdk::chain::keychain::LocalChangeSet;
 use bdk::chain::{ConfirmationTime, ConfirmationTimeAnchor};
-use bdk_esplora::{esplora_client, EsploraAsyncExt};
+
 use bdk_file_store::Store;
-use std::io::Write;
+use cln_rpc::model::DatastoreMode;
+use cln_rpc::{
+    model::requests::{DatastoreRequest, ListdatastoreRequest},
+    ClnRpc, Request, Response,
+};
+use home::home_dir;
+use serde::{Deserialize, Serialize};
+
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use anyhow::Ok;
-use watchdescriptor::wallet::DescriptorWallet;
+use watchdescriptor::wallet::{DescriptorWallet, DATADIR};
 
 use cln_plugin::{anyhow, messages, options, Builder, Error, Plugin};
 use tokio;
@@ -25,20 +35,30 @@ use watchdescriptor::state::WatchDescriptor;
 const UTXO_DEPOSIT_TAG: &str = "utxo_deposit";
 const UTXO_SPENT_TAG: &str = "utxo_spent";
 
-const DB_MAGIC: &str = "bdk_wallet_esplora_async_example";
-const STOP_GAP: usize = 50;
-const PARALLEL_REQUESTS: usize = 5;
-
 // #[tokio::main]
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), anyhow::Error> {
-    let watch_descriptor = WatchDescriptor::new();
+    // Create data dir if it does not exist
+    fs::create_dir_all(&home_dir().unwrap().join(DATADIR)).unwrap_or_else(|e| {
+        log::error!("Cannot create data dir: {e:?}");
+        std::process::exit(1);
+    });
+    // let watch_descriptor = WatchDescriptor::new();
+    // let mut watch_descriptor = WatchDescriptor {
+    //     // wallets: vec![],
+    //     wallets: serde_json::from_reader(fs::File::open(
+    //         home_dir().unwrap().join(DATADIR).join(WALLETS_FILE),
+    //     )?)?,
+    //     // network: bitcoin::Network::Bitcoin,
+    //     // network: cln_network.parse::<bitcoin::Network>().unwrap(),
+    //     network: bitcoin::Network::Bitcoin,
+    // };
     // // watch_descriptor.add_descriptor("tr([af4c5952/86h/0h/0h]xpub6DTzDxFnUS1vriU7fc3VkwdTnArhk6FafoZHRcfwjRqo7vkMnbAiKK9AEhR4feqcdsE36Y4ZCLHBcEszJcvV3pMLhS4D9Ed5VNhH6Cw17Pp/0/*)".to_string()).await;
     // // watch_descriptor.add_descriptor("tr([af4c5952/86h/0h/0h]xpub6DTzDxFnUS1vriU7fc3VkwdTnArhk6FafoZHRcfwjRqo7vkMnbAiKK9AEhR4feqcdsE36Y4ZCLHBcEszJcvV3pMLhS4D9Ed5VNhH6Cw17Pp/1/*)".to_string()).await;
-    let plugin_state = Arc::new(Mutex::new(watch_descriptor));
-    if let Some(plugin) = Builder::new(tokio::io::stdin(), tokio::io::stdout())
-    // if let Some(midstate) = Builder::new(tokio::io::stdin(), tokio::io::stdout())
-    // let builder = Builder::new(tokio::io::stdin(), tokio::io::stdout())
+    // let plugin_state = Arc::new(Mutex::new(watch_descriptor.clone()));
+    // if let Some(plugin) = Builder::new(tokio::io::stdin(), tokio::io::stdout())
+    // if let Some(plugin) = Builder::new(tokio::io::stdin(), tokio::io::stdout())
+    let builder = Builder::new(tokio::io::stdin(), tokio::io::stdout())
         .option(options::ConfigOption::new(
             "wd_network",
             options::Value::String(bitcoin::Network::Bitcoin.to_string()),
@@ -56,32 +76,68 @@ async fn main() -> Result<(), anyhow::Error> {
             "List descriptor wallets currently being watched",
             listdescriptors,
         )
+        .rpcmethod(
+            "deletedescriptor",
+            "Stop wathing a descriptor wallet",
+            deletedescriptor,
+        )
         .subscribe("block_added", block_added_handler)
-        .dynamic()
-        .start(plugin_state.clone())
-        // .configure()
-        .await?
-    {
-        // let midstate = if let Some(midstate) = builder.configure().await? {
-        //     midstate
-        // } else {
-        //     return Ok(());
-        // };
-        log::info!("Configuration from CLN main daemon: {:?}", plugin.configuration());
-        // let cln_network = midstate.configuration().network;
-        let cln_network = plugin.configuration().network;
-        let watch_descriptor = WatchDescriptor{
-            wallets: vec![],
-            // network: bitcoin::Network::Bitcoin,
-            network: cln_network.parse::<bitcoin::Network>().unwrap(),
-        };
-        log::info!("Initial Plugin State: {:?}", watch_descriptor);
-        // let plugin_state = Arc::new(Mutex::new(watch_descriptor));
-        // let plugin = midstate.start(plugin_state).await?;
-        plugin.join().await
+        .dynamic();
+    // .start(plugin_state.clone())
+    // .configure()
+    // .await?
+    // {
+    let configured_plugin = if let Some(cp) = builder.configure().await? {
+        cp
     } else {
-        Ok(())
-    }
+        return Ok(());
+    };
+    log::info!(
+        "Configuration from CLN main daemon: {:?}",
+        configured_plugin.configuration()
+    );
+    let cln_network = configured_plugin.configuration().network;
+    let rpc_file = configured_plugin.configuration().rpc_file;
+    let p = Path::new(&rpc_file);
+
+    let mut rpc = ClnRpc::new(p).await?;
+    let lds_response = rpc
+        .call(Request::ListDatastore(ListdatastoreRequest {
+            key: Some(vec!["watchdescriptor".to_owned()]),
+        }))
+        .await
+        .map_err(|e| anyhow!("Error calling listdatastore: {:?}", e))?;
+    let wallets: BTreeMap<String, DescriptorWallet> = match lds_response {
+        Response::ListDatastore(r) => match r.datastore.is_empty() {
+            true => BTreeMap::new(),
+            false => match &r.datastore[0].string {
+                Some(deserialized) => match serde_json::from_str(&deserialized) {
+                    core::result::Result::Ok(dws) => dws,
+                    core::result::Result::Err(e) => {
+                        log::error!("{}", e);
+                        return Err(e.into());
+                    }
+                },
+                None => BTreeMap::new(),
+            },
+        },
+        _ => panic!(),
+    };
+    // let wallets: Vec<DescriptorWallet> =
+    let watch_descriptor = WatchDescriptor {
+        // wallets: vec![],
+        wallets,
+        network: cln_network.parse::<bitcoin::Network>().unwrap(),
+    };
+    let plugin_state = Arc::new(Mutex::new(watch_descriptor.clone()));
+    plugin_state.lock().await.network = cln_network.parse::<bitcoin::Network>().unwrap();
+    // log::info!("Initial Plugin State: {:?}", watch_descriptor);
+    // let plugin_state = Arc::new(Mutex::new(watch_descriptor));
+    let plugin = configured_plugin.start(plugin_state).await?;
+    plugin.join().await
+    // } else {
+    //     Ok(())
+    // }
 }
 
 // assume we own all inputs, ie sent from our wallet. all inputs and outputs should generate coin movement bookkeeper events
@@ -455,85 +511,16 @@ async fn send_notifications_for_tx<'a>(
     Ok(())
 }
 
-async fn fetch_wallet<'a>(
-    dw: &DescriptorWallet,
-) -> Result<Wallet<Store<'a, LocalChangeSet<KeychainKind, ConfirmationTimeAnchor>>>, Error> {
-    let db_path = std::env::temp_dir().join("bdk-esplora-async-example");
-    let db = Store::<bdk::wallet::ChangeSet>::new_from_path(DB_MAGIC.as_bytes(), db_path)?;
-    // let external_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/0/*)";
-    // mutinynet_descriptor = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/*)"
-    let mutinynet_descriptor_ext = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/0/*)";
-    let mutinynet_descriptor_int = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/1/*)";
-    // let external_descriptor = "wpkh(tpubEBr4i6yk5nf5DAaJpsi9N2pPYBeJ7fZ5Z9rmN4977iYLCGco1VyjB9tvvuvYtfZzjD5A8igzgw3HeWeeKFmanHYqksqZXYXGsw5zjnj7KM9/*)";
-    // let internal_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/1/*)";
-
-    // let external_descriptor = mutinynet_descriptor_ext;
-    // let internal_descriptor = mutinynet_descriptor_int;
-    let external_descriptor = dw.descriptor.clone();
-    let internal_descriptor = dw.change_descriptor.clone();
-    log::info!("about to create wallet");
-    let mut wallet = Wallet::new(
-        &external_descriptor,
-        internal_descriptor.as_ref(),
-        db,
-        Network::Testnet,
-    )?;
-
-    // let address = wallet.get_address(AddressIndex::New);
-    // log::info!("Generated Address: {}", address);
-
-    let balance = wallet.get_balance();
-    log::info!("Wallet balance before syncing: {} sats", balance.total());
-
-    log::info!("Syncing...");
-    let client =
-        // esplora_client::Builder::new("https://blockstream.info/testnet/api").build_async()?;
-        esplora_client::Builder::new("https://mutinynet.com/api").build_async()?;
-
-    let local_chain = wallet.checkpoints();
-    let keychain_spks = wallet
-        .spks_of_all_keychains()
-        .into_iter()
-        .map(|(k, k_spks)| {
-            let mut once = Some(());
-            let mut stdout = std::io::stdout();
-            let k_spks = k_spks
-                .inspect(move |(spk_i, _)| match once.take() {
-                    Some(_) => log::info!("\nScanning keychain [{:?}]", k),
-                    None => log::info!(" {:<3}", spk_i),
-                })
-                .inspect(move |_| stdout.flush().expect("must flush"));
-            (k, k_spks)
-        })
-        .collect();
-    log::info!("CAG finished scanning");
-    let update = client
-        .scan(
-            local_chain,
-            keychain_spks,
-            [],
-            [],
-            STOP_GAP,
-            PARALLEL_REQUESTS,
-        )
-        .await?;
-    wallet.apply_update(update)?;
-    wallet.commit()?;
-
-    let balance = wallet.get_balance();
-    log::info!("Wallet balance after syncing: {} sats", balance.total());
-    return Ok(wallet);
-}
-
 type State = Arc<Mutex<WatchDescriptor>>;
 async fn watchdescriptor<'a>(
     plugin: Plugin<State>,
     v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
     let mut dw = DescriptorWallet::try_from(v.clone()).map_err(|x| anyhow!(x))?;
+    dw.network = Some(plugin.state().lock().await.network.clone());
     log::info!("params = {:?}", dw);
 
-    let wallet = fetch_wallet(&dw).await?;
+    let wallet = dw.fetch_wallet().await?;
 
     // transactions = wallet.list_transactions(false)?;
     let bdk_transactions_iter = wallet.transactions();
@@ -559,23 +546,99 @@ async fn watchdescriptor<'a>(
         }
     }
     log::info!("waiting for wallet lock");
-    plugin.state().lock().await.add_descriptor_wallet(dw);
+    plugin.state().lock().await.add_descriptor_wallet(&dw)?;
+
+    let wallets_str = json!(plugin.state().lock().await.wallets).to_string();
+    let rpc_file = plugin.configuration().rpc_file;
+    let p = Path::new(&rpc_file);
+
+    let mut rpc = ClnRpc::new(p).await?;
+    let _ds_response = rpc
+        .call(Request::Datastore(DatastoreRequest {
+            key: vec!["watchdescriptor".to_owned()],
+            string: Some(wallets_str),
+            hex: None,
+            mode: Some(DatastoreMode::CREATE_OR_REPLACE),
+            generation: None,
+        }))
+        .await
+        .map_err(|e| anyhow!("Error calling listdatastore: {:?}", e))?;
     log::info!("wallet added");
-    let messasge = format!(
+    let message = format!(
         "Wallet with checksum {} successfully added",
-        // "Wallet successfully added",
-        wallet.descriptor_checksum(bdk::KeychainKind::External)
+        &dw.get_name()?
     );
     log::info!("returning");
-    Ok(json!(messasge))
+    Ok(json!(message))
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+struct ListDescriptorsResponseWallet {
+    pub descriptor: String,
+    pub change_descriptor: Option<String>,
+    pub birthday: Option<u32>,
+    pub gap: Option<u32>,
+    pub network: Option<Network>,
 }
 
 async fn listdescriptors(
     plugin: Plugin<State>,
     _v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
-    log::info!("HELLO LISTDESCRIPTORS");
-    Ok(json!(plugin.state().lock().await.wallets))
+    let wallets = &plugin.state().lock().await.wallets;
+    let mut result = BTreeMap::<String, ListDescriptorsResponseWallet>::new();
+    for (wallet_name, wallet) in wallets {
+        result.insert(
+            wallet_name.clone(),
+            ListDescriptorsResponseWallet {
+                descriptor: wallet.descriptor.clone(),
+                change_descriptor: wallet.change_descriptor.clone(),
+                birthday: wallet.birthday.clone(),
+                gap: wallet.gap.clone(),
+                network: wallet.network.clone(),
+            },
+        );
+    }
+    Ok(json!(result))
+}
+
+async fn deletedescriptor(
+    plugin: Plugin<State>,
+    v: serde_json::Value,
+) -> Result<serde_json::Value, Error> {
+    let descriptor_name = match v {
+        serde_json::Value::Array(a) => match a.get(0) {
+            Some(res) => match res.clone().as_str() {
+                Some(r) => r.to_owned(),
+                None => return Err(anyhow!("can't parse args")),
+            },
+            None => return Err(anyhow!("can't parse args")),
+        },
+        _ => return Err(anyhow!("can't parse args")),
+    };
+    let wallets = &mut plugin.state().lock().await.wallets;
+    let _removed_item: Option<DescriptorWallet>;
+    if wallets.contains_key(&descriptor_name) {
+        _removed_item = wallets.remove(&descriptor_name);
+        let rpc_file = plugin.configuration().rpc_file;
+        let p = Path::new(&rpc_file);
+
+        let mut rpc = ClnRpc::new(p).await?;
+        let _ds_response = rpc
+            .call(Request::Datastore(DatastoreRequest {
+                key: vec!["watchdescriptor".to_owned()],
+                string: Some(json!(wallets).to_string()),
+                hex: None,
+                mode: Some(DatastoreMode::CREATE_OR_REPLACE),
+                generation: None,
+            }))
+            .await
+            .map_err(|e| anyhow!("Error calling listdatastore: {:?}", e))?;
+    } else {
+        return Err(anyhow!("can't find wallet {}", descriptor_name));
+    }
+
+    Ok(json!(format!("Deleted wallet: {}", descriptor_name)))
 }
 
 async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Result<(), Error> {
@@ -586,8 +649,8 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
     );
 
     let descriptor_wallets = &mut plugin.state().lock().await.wallets;
-    for dw in descriptor_wallets.iter_mut() {
-        let wallet = fetch_wallet(&dw).await?;
+    for (_dw_desc, dw) in descriptor_wallets.iter_mut() {
+        let wallet = dw.fetch_wallet().await?;
         let bdk_transactions_iter = wallet.transactions();
         let mut transactions = Vec::<TransactionDetails>::new();
         for bdk_transaction in bdk_transactions_iter {
