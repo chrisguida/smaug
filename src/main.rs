@@ -7,6 +7,7 @@ extern crate serde_json;
 use bdk::chain::keychain::LocalChangeSet;
 use bdk::chain::{ConfirmationTime, ConfirmationTimeAnchor};
 
+
 use bdk_file_store::Store;
 use cln_rpc::model::DatastoreMode;
 use cln_rpc::{
@@ -14,6 +15,7 @@ use cln_rpc::{
     ClnRpc, Request, Response,
 };
 use home::home_dir;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
@@ -72,6 +74,11 @@ async fn main() -> Result<(), anyhow::Error> {
             "listdescriptors",
             "List descriptor wallets currently being watched",
             listdescriptors,
+        )
+        .rpcmethod(
+            "deletedescriptor",
+            "Stop wathing a descriptor wallet",
+            deletedescriptor,
         )
         .subscribe("block_added", block_added_handler)
         .dynamic();
@@ -569,6 +576,31 @@ async fn listdescriptors(
     _v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
     Ok(json!(plugin.state().lock().await.wallets))
+}
+
+async fn deletedescriptor(
+    plugin: Plugin<State>,
+    v: serde_json::Value,
+) -> Result<serde_json::Value, Error> {
+    let descriptor_name = match v {
+        serde_json::Value::Array(a) => match a.get(0) {
+            Some(res) => match res.clone().as_str() {
+                Some(r) => r.to_owned(),
+                None => return Err(anyhow!("can't parse args")),
+            },
+            None => return Err(anyhow!("can't parse args")),
+        },
+        _ => return Err(anyhow!("can't parse args")),
+    };
+    let wallets = &mut plugin.state().lock().await.wallets;
+    let removed_item: Option<DescriptorWallet>;
+    if wallets.contains_key(&descriptor_name) {
+        removed_item = wallets.remove(&descriptor_name);
+    } else {
+        return Err(anyhow!("can't find wallet {}", descriptor_name));
+    }
+
+    Ok(json!(removed_item))
 }
 
 async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Result<(), Error> {
