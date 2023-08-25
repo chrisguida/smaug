@@ -74,7 +74,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let builder = Builder::new(tokio::io::stdin(), tokio::io::stdout())
         .option(options::ConfigOption::new(
             "wd_network",
-            options::Value::String(bitcoin::Network::Bitcoin.to_string()),
+            options::Value::OptString,
             "Which network to use: [bitcoin, testnet, signet, regtest]",
         ))
         .notification(messages::NotificationTopic::new(UTXO_DEPOSIT_TAG))
@@ -109,7 +109,21 @@ async fn main() -> Result<(), anyhow::Error> {
         "Configuration from CLN main daemon: {:?}",
         configured_plugin.configuration()
     );
-    let cln_network = configured_plugin.configuration().network;
+    log::info!(
+        "wd_network = {:?}, cln_network = {}",
+        configured_plugin.option("wd_network"),
+        configured_plugin.configuration().network
+    );
+    let network = match configured_plugin.option("wd_network") {
+        Some(wd_network) => match wd_network.as_str() {
+            Some(wdn) => wdn.to_owned(),
+            None => configured_plugin.configuration().network,
+        },
+        None => configured_plugin.configuration().network,
+    }
+    .parse::<bitcoin::Network>()
+    .unwrap();
+    log::info!("network = {}", network);
     let rpc_file = configured_plugin.configuration().rpc_file;
     let p = Path::new(&rpc_file);
 
@@ -136,16 +150,9 @@ async fn main() -> Result<(), anyhow::Error> {
         },
         _ => panic!(),
     };
-    // let wallets: Vec<DescriptorWallet> =
-    let watch_descriptor = WatchDescriptor {
-        // wallets: vec![],
-        wallets,
-        network: cln_network.parse::<bitcoin::Network>().unwrap(),
-    };
+    let watch_descriptor = WatchDescriptor { wallets, network };
     let plugin_state = Arc::new(Mutex::new(watch_descriptor.clone()));
-    plugin_state.lock().await.network = cln_network.parse::<bitcoin::Network>().unwrap();
-    // log::info!("Initial Plugin State: {:?}", watch_descriptor);
-    // let plugin_state = Arc::new(Mutex::new(watch_descriptor));
+    plugin_state.lock().await.network = network;
     let plugin = configured_plugin.start(plugin_state).await?;
     plugin.join().await
     // } else {

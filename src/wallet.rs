@@ -52,13 +52,15 @@ pub enum WDNetwork {
     Mutinynet,
 }
 
-pub fn get_network_url(network: WDNetwork) -> String {
+pub fn get_network_url(network: &str) -> String {
     match network {
-        WDNetwork::Mainnet => "https://blockstream.info/api".to_owned(),
-        WDNetwork::Testnet => "https://blockstream.info/testnet/api".to_owned(),
-        WDNetwork::Regtest => "https://mutinynet.com/api".to_owned(),
-        WDNetwork::Signet => "https://mempool.space/signet/api".to_owned(),
-        WDNetwork::Mutinynet => "https://mutinynet.com/api".to_owned(),
+        "bitcoin" | "mainnet" => "https://blockstream.info/api".to_owned(),
+        "testnet" => "https://blockstream.info/testnet/api".to_owned(),
+        "regtest" | "mutinynet" => "https://mutinynet.com/api".to_owned(),
+        "signet" => "https://mempool.space/signet/api".to_owned(),
+        _ => {
+            panic!();
+        }
     }
 }
 
@@ -234,22 +236,16 @@ impl DescriptorWallet {
         log::info!("Wallet balance before syncing: {} sats", balance.total());
 
         log::info!("Syncing...");
-        // let network = self.network.unwrap();
-        // let network_str: String = to_variant_name(&network).unwrap().to_owned();
-        // let wd_network = ;
-        // let wd_network = );
         log::info!("using network: {}", json!(self.network).as_str().unwrap());
         log::info!(
             "using esplora url: {}",
-            get_network_url(serde_json::from_str(json!(self.network).as_str().unwrap()).unwrap())
-                .as_str()
+            get_network_url(json!(self.network).as_str().unwrap()).as_str()
         );
         let client =
             // esplora_client::Builder::new("https://blockstream.info/testnet/api").build_async()?;
             esplora_client::Builder::new(
-                get_network_url(serde_json::from_str(
+                get_network_url(
                         json!(self.network).as_str().unwrap()
-                    ).unwrap()
                 ).as_str()
             ).build_async()?;
 
