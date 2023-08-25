@@ -1,8 +1,11 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use bdk::bitcoin;
+use tokio::sync::Mutex;
 
 use crate::wallet::DescriptorWallet;
+
+pub type State = Arc<Mutex<WatchDescriptor>>;
 
 #[derive(Debug, Clone)]
 pub struct WatchDescriptor {
