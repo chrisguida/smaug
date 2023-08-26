@@ -1,5 +1,5 @@
 [package]
-name = "watchdescriptor"
+name = "smaug"
 version = "0.1.0"
 edition = "2021"
 
