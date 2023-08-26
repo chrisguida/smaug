@@ -5,16 +5,16 @@ use tokio::sync::Mutex;
 
 use crate::wallet::DescriptorWallet;
 
-pub type State = Arc<Mutex<WatchDescriptor>>;
+pub type State = Arc<Mutex<Smaug>>;
 
 #[derive(Debug, Clone)]
-pub struct WatchDescriptor {
+pub struct Smaug {
     /// A collection of descriptors the plugin is watching.
     pub wallets: BTreeMap<String, DescriptorWallet>,
     pub network: bitcoin::Network,
 }
 
-impl WatchDescriptor {
+impl Smaug {
     pub fn new() -> Self {
         Self {
             wallets: BTreeMap::new(),

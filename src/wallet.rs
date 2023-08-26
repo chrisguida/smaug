@@ -18,14 +18,14 @@ use std::{collections::BTreeMap, fmt, io::Write};
 
 use crate::state::State;
 
-pub const DATADIR: &str = ".watchdescriptor";
+pub const DATADIR: &str = ".smaug";
 const STOP_GAP: usize = 50;
 const PARALLEL_REQUESTS: usize = 5;
 
 pub const UTXO_DEPOSIT_TAG: &str = "utxo_deposit";
 pub const UTXO_SPENT_TAG: &str = "utxo_spent";
 
-/// Errors related to the `watchdescriptor` command.
+/// Errors related to the `smaug` command.
 #[derive(Debug)]
 pub enum WatchError {
     InvalidDescriptor(String),
@@ -85,7 +85,7 @@ pub struct AddArgs {
     pub gap: Option<u32>,
 }
 
-/// Parameters related to the `watchdescriptor` command.
+/// Parameters related to the `smaug` command.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct DescriptorWallet {
     pub descriptor: String,
@@ -330,7 +330,7 @@ impl DescriptorWallet {
                                 continue;
                             }
                             ConfirmationTime::Confirmed { height, time } => {
-                                let acct = format!("watchdescriptor:{}", self.get_name()?);
+                                let acct = format!("smaug:{}", self.get_name()?);
                                 let amount = po.value;
                                 let outpoint = format!("{}", input.previous_output.to_string());
                                 log::info!("outpoint = {}", format!("{}", outpoint));
@@ -343,9 +343,7 @@ impl DescriptorWallet {
                                     "timestamp": format!("{}", time),
                                     "blockheight": format!("{}", height),
                                 });
-                                log::info!(
-                                    "INSIDE SEND SPEND NOTIFICATION ON WATCHDESCRIPTOR SIDE"
-                                );
+                                log::info!("INSIDE SEND SPEND NOTIFICATION ON SMAUG SIDE");
                                 let cloned_plugin = plugin.clone();
                                 tokio::spawn(async move {
                                     if let Err(e) = cloned_plugin
@@ -375,10 +373,10 @@ impl DescriptorWallet {
                             let acct: String;
                             let transfer_from: String;
                             if wallet.is_mine(&output.script_pubkey) {
-                                acct = format!("watchdescriptor:{}", self.get_name()?);
+                                acct = format!("smaug:{}", self.get_name()?);
                                 transfer_from = "external".to_owned();
                             } else {
-                                transfer_from = format!("watchdescriptor:{}", self.get_name()?);
+                                transfer_from = format!("smaug:{}", self.get_name()?);
                                 acct = "external".to_owned();
                             }
                             let amount = output.value;
@@ -397,7 +395,7 @@ impl DescriptorWallet {
                                     "timestamp": format!("{}", time),
                                     "blockheight": format!("{}", height),
                             });
-                            log::info!("INSIDE SEND DEPOSIT NOTIFICATION ON WATCHDESCRIPTOR SIDE");
+                            log::info!("INSIDE SEND DEPOSIT NOTIFICATION ON SMAUG SIDE");
                             let cloned_plugin = plugin.clone();
                             tokio::spawn(async move {
                                 if let Err(e) = cloned_plugin
@@ -442,11 +440,11 @@ impl DescriptorWallet {
                                 let acct: String;
                                 let transfer_from: String;
                                 if wallet.is_mine(&output.script_pubkey) {
-                                    acct = format!("watchdescriptor:{}", self.get_name()?);
+                                    acct = format!("smaug:{}", self.get_name()?);
                                     transfer_from = "external".to_owned();
                                 } else {
                                     // transfer_from = format!(
-                                    //     "watchdescriptor:{}",
+                                    //     "smaug:{}",
                                     //     self.get_name?
                                     // );
                                     // acct = "external".to_owned();
@@ -469,9 +467,7 @@ impl DescriptorWallet {
                                         "timestamp": format!("{}", time),
                                         "blockheight": format!("{}", height),
                                 });
-                                log::info!(
-                                    "INSIDE SEND DEPOSIT NOTIFICATION ON WATCHDESCRIPTOR SIDE"
-                                );
+                                log::info!("INSIDE SEND DEPOSIT NOTIFICATION ON SMAUG SIDE");
                                 let cloned_plugin = plugin.clone();
                                 tokio::spawn(async move {
                                     if let Err(e) = cloned_plugin
@@ -517,7 +513,7 @@ impl DescriptorWallet {
                             }
                             ConfirmationTime::Confirmed { height, time } => {
                                 if wallet.is_mine(&po.script_pubkey) {
-                                    let acct = format!("watchdescriptor:{}", self.get_name()?);
+                                    let acct = format!("smaug:{}", self.get_name()?);
                                     let amount = po.value;
                                     let outpoint = format!("{}", input.previous_output.to_string());
                                     log::info!("outpoint = {}", format!("{}", outpoint));
@@ -530,9 +526,7 @@ impl DescriptorWallet {
                                         "timestamp": format!("{}", time),
                                         "blockheight": format!("{}", height),
                                     });
-                                    log::info!(
-                                        "INSIDE SEND SPEND NOTIFICATION ON WATCHDESCRIPTOR SIDE"
-                                    );
+                                    log::info!("INSIDE SEND SPEND NOTIFICATION ON SMAUG SIDE");
                                     let cloned_plugin = plugin.clone();
                                     tokio::spawn(async move {
                                         if let Err(e) = cloned_plugin
@@ -566,8 +560,7 @@ impl DescriptorWallet {
                         ConfirmationTime::Confirmed { height, time } => {
                             let acct: String;
                             let transfer_from: String;
-                            let our_acct =
-                                format!("watchdescriptor:{}:shared_outputs", self.get_name()?);
+                            let our_acct = format!("smaug:{}:shared_outputs", self.get_name()?);
                             let ext_acct = "external".to_owned();
                             if wallet.is_mine(&output.script_pubkey) {
                                 acct = our_acct;
@@ -592,7 +585,7 @@ impl DescriptorWallet {
                                     "timestamp": format!("{}", time),
                                     "blockheight": format!("{}", height),
                             });
-                            log::info!("INSIDE SEND DEPOSIT NOTIFICATION ON WATCHDESCRIPTOR SIDE");
+                            log::info!("INSIDE SEND DEPOSIT NOTIFICATION ON SMAUG SIDE");
                             let cloned_plugin = plugin.clone();
                             tokio::spawn(async move {
                                 if let Err(e) = cloned_plugin

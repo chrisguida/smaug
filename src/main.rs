@@ -24,15 +24,13 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use anyhow::Ok;
-use watchdescriptor::wallet::{
-    AddArgs, DescriptorWallet, DATADIR, UTXO_DEPOSIT_TAG, UTXO_SPENT_TAG,
-};
+use smaug::wallet::{AddArgs, DescriptorWallet, DATADIR, UTXO_DEPOSIT_TAG, UTXO_SPENT_TAG};
 
 use cln_plugin::{anyhow, messages, options, Builder, Error, Plugin};
 use tokio;
 
 use bdk::{bitcoin, TransactionDetails};
-use watchdescriptor::state::{State, WatchDescriptor};
+use smaug::state::{Smaug, State};
 
 #[tokio::main]
 // #[tokio::main(flavor = "current_thread")]
@@ -51,7 +49,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .notification(messages::NotificationTopic::new(UTXO_DEPOSIT_TAG))
         .notification(messages::NotificationTopic::new(UTXO_SPENT_TAG))
         .rpcmethod(
-            "watchdescriptor",
+            "smaug",
             "Watch one or more external wallet descriptors and emit notifications when coins are moved",
             parse_command,
         )
@@ -87,7 +85,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut rpc = ClnRpc::new(p).await?;
     let lds_response = rpc
         .call(Request::ListDatastore(ListdatastoreRequest {
-            key: Some(vec!["watchdescriptor".to_owned()]),
+            key: Some(vec!["smaug".to_owned()]),
         }))
         .await
         .map_err(|e| anyhow!("Error calling listdatastore: {:?}", e))?;
@@ -107,7 +105,7 @@ async fn main() -> Result<(), anyhow::Error> {
         },
         _ => panic!(),
     };
-    let watch_descriptor = WatchDescriptor { wallets, network };
+    let watch_descriptor = Smaug { wallets, network };
     let plugin_state = Arc::new(Mutex::new(watch_descriptor.clone()));
     plugin_state.lock().await.network = network;
     let plugin = configured_plugin.start(plugin_state).await?;
@@ -116,11 +114,11 @@ async fn main() -> Result<(), anyhow::Error> {
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "Watchdescriptor",
-    bin_name = "lightning-cli watchdescriptor --",
+    name = "Smaug",
+    bin_name = "lightning-cli smaug --",
     author = "chrisguida",
     version = "0.0.1",
-    about = "Watchdescriptor: a Rust CLN plugin to monitor your treasury\n\nWatch one or more external wallet descriptors and emit notifications when coins are moved",
+    about = "Smaug: a Rust CLN plugin to monitor your treasury\n\nWatch one or more external wallet descriptors and emit notifications when coins are moved",
     long_about = None,
     no_binary_name = true
 )]
@@ -168,7 +166,7 @@ async fn parse_command(
             log::info!("matches = {:?}", cli);
             match cli.command {
                 Some(c) => match c {
-                    Commands::Add(args) => return watchdescriptor(plugin, args).await,
+                    Commands::Add(args) => return smaug(plugin, args).await,
                     Commands::Rm { descriptor_name } => {
                         return deletedescriptor(plugin, descriptor_name).await
                     }
@@ -205,7 +203,7 @@ async fn parse_command(
     }
 }
 
-async fn watchdescriptor(
+async fn smaug(
     plugin: Plugin<State>,
     // v: serde_json::Value,
     args: AddArgs,
@@ -245,7 +243,7 @@ async fn watchdescriptor(
     let mut rpc = ClnRpc::new(p).await?;
     let _ds_response = rpc
         .call(Request::Datastore(DatastoreRequest {
-            key: vec!["watchdescriptor".to_owned()],
+            key: vec!["smaug".to_owned()],
             string: Some(wallets_str),
             hex: None,
             mode: Some(DatastoreMode::CREATE_OR_REPLACE),
@@ -307,7 +305,7 @@ async fn deletedescriptor(
         let mut rpc = ClnRpc::new(p).await?;
         let _ds_response = rpc
             .call(Request::Datastore(DatastoreRequest {
-                key: vec!["watchdescriptor".to_owned()],
+                key: vec!["smaug".to_owned()],
                 string: Some(json!(wallets).to_string()),
                 hex: None,
                 mode: Some(DatastoreMode::CREATE_OR_REPLACE),
@@ -324,10 +322,7 @@ async fn deletedescriptor(
 
 async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Result<(), Error> {
     log::info!("Got a block_added notification: {}", v);
-    log::info!(
-        "WatchDescriptor state!!! {:?}",
-        plugin.state().lock().await.wallets
-    );
+    log::info!("Smaug state!!! {:?}", plugin.state().lock().await.wallets);
 
     let descriptor_wallets = &mut plugin.state().lock().await.wallets;
     for (_dw_desc, dw) in descriptor_wallets.iter_mut() {
