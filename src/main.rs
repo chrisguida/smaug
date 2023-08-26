@@ -5,6 +5,8 @@
 extern crate serde_json;
 
 use bdk::bitcoin::Network;
+use clap::error::ErrorKind;
+use clap::{arg, CommandFactory, Parser, Subcommand};
 use cln_rpc::model::DatastoreMode;
 use cln_rpc::{
     model::requests::{DatastoreRequest, ListdatastoreRequest},
@@ -12,15 +14,19 @@ use cln_rpc::{
 };
 use home::home_dir;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use std::collections::BTreeMap;
+use std::ffi::OsString;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use anyhow::Ok;
-use watchdescriptor::wallet::{DescriptorWallet, DATADIR, UTXO_DEPOSIT_TAG, UTXO_SPENT_TAG};
+use watchdescriptor::wallet::{
+    AddArgs, DescriptorWallet, DATADIR, UTXO_DEPOSIT_TAG, UTXO_SPENT_TAG,
+};
 
 use cln_plugin::{anyhow, messages, options, Builder, Error, Plugin};
 use tokio;
@@ -47,24 +53,10 @@ async fn main() -> Result<(), anyhow::Error> {
         .rpcmethod(
             "watchdescriptor",
             "Watch one or more external wallet descriptors and emit notifications when coins are moved",
-            watchdescriptor,
-        )
-        .rpcmethod(
-            "listdescriptors",
-            "List descriptor wallets currently being watched",
-            listdescriptors,
-        )
-        .rpcmethod(
-            "deletedescriptor",
-            "Stop wathing a descriptor wallet",
-            deletedescriptor,
+            parse_command,
         )
         .subscribe("block_added", block_added_handler)
         .dynamic();
-    // .start(plugin_state.clone())
-    // .configure()
-    // .await?
-    // {
     let configured_plugin = if let Some(cp) = builder.configure().await? {
         cp
     } else {
@@ -122,12 +114,105 @@ async fn main() -> Result<(), anyhow::Error> {
     plugin.join().await
 }
 
-async fn watchdescriptor<'a>(
+#[derive(Debug, Parser)]
+#[command(
+    name = "Watchdescriptor",
+    bin_name = "lightning-cli watchdescriptor --",
+    author = "chrisguida",
+    version = "0.0.1",
+    about = "Watchdescriptor: a Rust CLN plugin to monitor your treasury\n\nWatch one or more external wallet descriptors and emit notifications when coins are moved",
+    long_about = None,
+    no_binary_name = true
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Debug, Subcommand)]
+enum Commands {
+    /// Start watching a descriptor wallet
+    #[command(alias = "watch")]
+    Add(AddArgs),
+    /// Stop watching a descriptor wallet
+    #[command(alias = "del", alias = "delete", alias = "remove")]
+    Rm {
+        /// Deterministic name (concatenated checksums) of wallet to delete
+        #[arg(short, long)]
+        descriptor_name: String,
+    },
+    /// List descriptor wallets currently being watched
+    #[command(alias = "list")]
+    Ls,
+}
+
+fn to_os_string(v: Value) -> OsString {
+    v.as_str().unwrap().to_owned().into()
+}
+
+async fn parse_command(
     plugin: Plugin<State>,
     v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
-    let mut dw = DescriptorWallet::try_from(v.clone()).map_err(|x| anyhow!(x))?;
-    dw.network = Some(plugin.state().lock().await.network.clone());
+    let arg_vec = match v.clone() {
+        serde_json::Value::Array(a) => a,
+        _ => {
+            return Err(anyhow!("only positional args supported. no keyword args."));
+        }
+    };
+
+    let matches = Cli::try_parse_from(arg_vec.iter().map(|x| to_os_string(x.clone())));
+
+    match matches {
+        core::result::Result::Ok(cli) => {
+            log::info!("matches = {:?}", cli);
+            match cli.command {
+                Some(c) => match c {
+                    Commands::Add(args) => return watchdescriptor(plugin, args).await,
+                    Commands::Rm { descriptor_name } => {
+                        return deletedescriptor(plugin, descriptor_name).await
+                    }
+                    Commands::Ls => return listdescriptors(plugin).await,
+                },
+                None => {
+                    let help_json = json!({
+                        "help_msg": format!("\n{}",  <Cli as CommandFactory>::command().render_help()),
+                        "format-hint": "simple",
+                    });
+                    return Ok(json!(help_json));
+                }
+            }
+        }
+        core::result::Result::Err(e) => match e.kind() {
+            ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => {
+                let help_json = json!({
+                    "help_msg": format!("\n{}", e.to_string()),
+                    "format-hint": "simple",
+                });
+                log::info!("{}", help_json);
+                return Ok(json!(help_json));
+            }
+            _ => {
+                let error_json = json!({
+                    "error_message": e.to_string(),
+                    "format-hint": "simple",
+                });
+                log::info!("args = {:?}", v);
+                log::info!("{}", error_json);
+                return Ok(json!(error_json));
+            }
+        },
+    }
+}
+
+async fn watchdescriptor(
+    plugin: Plugin<State>,
+    // v: serde_json::Value,
+    args: AddArgs,
+) -> Result<serde_json::Value, Error> {
+    let mut dw = DescriptorWallet::from_args(args, plugin.state().lock().await.network.clone())
+        .map_err(|e| anyhow!("error parsing args: {}", e))?;
+    // dw.network = );
     log::info!("params = {:?}", dw);
 
     let wallet = dw.fetch_wallet().await?;
@@ -178,7 +263,7 @@ async fn watchdescriptor<'a>(
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-struct ListDescriptorsResponseWallet {
+struct ListResponseItem {
     pub descriptor: String,
     pub change_descriptor: Option<String>,
     pub birthday: Option<u32>,
@@ -188,14 +273,14 @@ struct ListDescriptorsResponseWallet {
 
 async fn listdescriptors(
     plugin: Plugin<State>,
-    _v: serde_json::Value,
+    // _v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
     let wallets = &plugin.state().lock().await.wallets;
-    let mut result = BTreeMap::<String, ListDescriptorsResponseWallet>::new();
+    let mut result = BTreeMap::<String, ListResponseItem>::new();
     for (wallet_name, wallet) in wallets {
         result.insert(
             wallet_name.clone(),
-            ListDescriptorsResponseWallet {
+            ListResponseItem {
                 descriptor: wallet.descriptor.clone(),
                 change_descriptor: wallet.change_descriptor.clone(),
                 birthday: wallet.birthday.clone(),
@@ -209,18 +294,9 @@ async fn listdescriptors(
 
 async fn deletedescriptor(
     plugin: Plugin<State>,
-    v: serde_json::Value,
+    // v: serde_json::Value,
+    descriptor_name: String,
 ) -> Result<serde_json::Value, Error> {
-    let descriptor_name = match v {
-        serde_json::Value::Array(a) => match a.get(0) {
-            Some(res) => match res.clone().as_str() {
-                Some(r) => r.to_owned(),
-                None => return Err(anyhow!("can't parse args")),
-            },
-            None => return Err(anyhow!("can't parse args")),
-        },
-        _ => return Err(anyhow!("can't parse args")),
-    };
     let wallets = &mut plugin.state().lock().await.wallets;
     let _removed_item: Option<DescriptorWallet>;
     if wallets.contains_key(&descriptor_name) {
@@ -259,7 +335,6 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
         let bdk_transactions_iter = wallet.transactions();
         let mut transactions = Vec::<TransactionDetails>::new();
         for bdk_transaction in bdk_transactions_iter {
-            // log::info!("BDK transaction = {:?}", bdk_transaction);
             log::info!("BDK transaction = {:?}", bdk_transaction.node.tx);
             transactions.push(wallet.get_tx(bdk_transaction.node.txid, true).unwrap());
         }

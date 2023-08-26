@@ -9,6 +9,7 @@ use bdk::{
 };
 use bdk_esplora::{esplora_client, EsploraAsyncExt};
 use bdk_file_store::Store;
+use clap::{command, Parser};
 use cln_plugin::{Error, Plugin};
 use home::home_dir;
 use serde::{Deserialize, Serialize};
@@ -33,6 +34,8 @@ pub enum WatchError {
     InvalidGap(String),
     InvalidFormat(String),
 }
+
+impl std::error::Error for WatchError {}
 
 impl std::fmt::Display for WatchError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -69,6 +72,19 @@ pub fn get_network_url(network: &str) -> String {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone, Parser)]
+#[command(author, version, about, long_about = None)]
+pub struct AddArgs {
+    /// External descriptor of wallet to add
+    pub descriptor: String,
+    /// Internal descriptor of wallet to add
+    pub change_descriptor: Option<String>,
+    /// Birthday of wallet to add. Must be a block height between 0 and 4294967295
+    pub birthday: Option<u32>,
+    /// Number of empty addresses to scan before giving up. Must be between 0 and 2147483647
+    pub gap: Option<u32>,
+}
+
 /// Parameters related to the `watchdescriptor` command.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct DescriptorWallet {
@@ -103,6 +119,17 @@ impl DescriptorWallet {
             params = params.with_network(network.unwrap())?
         }
         Ok(params)
+    }
+
+    pub fn from_args(args: AddArgs, network: Network) -> Result<Self, WatchError> {
+        Ok(Self {
+            descriptor: args.descriptor,
+            change_descriptor: args.change_descriptor,
+            birthday: args.birthday,
+            gap: args.gap,
+            transactions: BTreeMap::new(),
+            network: Some(network),
+        })
     }
 
     fn from_descriptor(descriptor: &str) -> Result<Self, WatchError> {
