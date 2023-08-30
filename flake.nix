@@ -19,7 +19,7 @@
             owner = "niftynei";
             repo = "lightning";
             rev = "44c5b523683160e8c20bda200c6a5a59ea40bc5e";
-            sha256 = "sha256-9T5d5W12v4b88FmCRiXhgQrzXOSCR5ByzT1ZJ05FI3A=";
+            sha256 = "sha256-tWxnuVHhXl7JWwMxQ46b+Jd7PeoMVr7pnWXv5Of5AeI=";
             fetchSubmodules = true;
           };
         });
@@ -33,7 +33,7 @@
       naersk-lib = legacyPackages.callPackage naersk {};
       packageDefault = naersk-lib.buildPackage ./.;
       devShells.default = with legacyPackages; mkShell {
-          buildInputs = [cargo rustc rustfmt pre-commit rustPackages.clippy clightning libsodium pkg-config ];
+          buildInputs = [cargo rustc rustfmt pre-commit rustPackages.clippy clightning libsodium openssl pkg-config ];
           RUST_SRC_PATH = rustPlatform.rustLibSrc;
         };
     });
