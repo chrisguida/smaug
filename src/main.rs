@@ -136,7 +136,7 @@ enum Commands {
     #[command(alias = "del", alias = "delete", alias = "remove")]
     Rm {
         /// Deterministic name (concatenated checksums) of wallet to delete
-        #[arg(short, long)]
+        // #[arg(short, long)]
         descriptor_name: String,
     },
     /// List descriptor wallets currently being watched
