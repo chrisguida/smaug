@@ -11,10 +11,10 @@
     utils,
     naersk,
     ...
-  }:
-  let
-      cln-onchain-notif = final: prev: {
-        clightning = prev.clightning.overrideAttrs (old: {
+  }: utils.lib.eachDefaultSystem (system:
+    let
+      cln-overlay = final: prev: {
+        clightning = prev.clightning.overrideAttrs {
           src = prev.fetchFromGitHub {
             owner = "niftynei";
             repo = "lightning";
@@ -22,19 +22,20 @@
             sha256 = "sha256-tWxnuVHhXl7JWwMxQ46b+Jd7PeoMVr7pnWXv5Of5AeI=";
             fetchSubmodules = true;
           };
-        });
+        };
       };
-      pkgsForSystem = system: import nixpkgs {
+
+      pkgs = import nixpkgs {
         inherit system;
-        overlays = [cln-onchain-notif];
+        overlays = [ cln-overlay ];
       };
-    in utils.lib.eachDefaultSystem (system: rec {
-      legacyPackages = pkgsForSystem system;
-      naersk-lib = legacyPackages.callPackage naersk {};
-      packageDefault = naersk-lib.buildPackage ./.;
-      devShells.default = with legacyPackages; mkShell {
-          buildInputs = [cargo rustc rustfmt pre-commit rustPackages.clippy clightning libsodium openssl pkg-config ];
-          RUST_SRC_PATH = rustPlatform.rustLibSrc;
+      naersk-lib = pkgs.callPackage naersk {};
+    in rec {
+      defaultPackage = naersk-lib.buildPackage ./.;
+
+      devShell = pkgs.mkShell {
+          buildInputs = with pkgs; [ cargo rustc rustfmt pre-commit rustPackages.clippy libsodium pkg-config clightning ];
+          RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
         };
     });
 }
