@@ -166,11 +166,11 @@ async fn parse_command(
             log::info!("matches = {:?}", cli);
             match cli.command {
                 Some(c) => match c {
-                    Commands::Add(args) => return smaug(plugin, args).await,
+                    Commands::Add(args) => return add(plugin, args).await,
                     Commands::Rm { descriptor_name } => {
-                        return deletedescriptor(plugin, descriptor_name).await
+                        return delete(plugin, descriptor_name).await
                     }
-                    Commands::Ls => return listdescriptors(plugin).await,
+                    Commands::Ls => return list(plugin).await,
                 },
                 None => {
                     let help_json = json!({
@@ -203,7 +203,7 @@ async fn parse_command(
     }
 }
 
-async fn smaug(
+async fn add(
     plugin: Plugin<State>,
     // v: serde_json::Value,
     args: AddArgs,
@@ -269,7 +269,7 @@ struct ListResponseItem {
     pub network: Option<Network>,
 }
 
-async fn listdescriptors(
+async fn list(
     plugin: Plugin<State>,
     // _v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
@@ -290,7 +290,7 @@ async fn listdescriptors(
     Ok(json!(result))
 }
 
-async fn deletedescriptor(
+async fn delete(
     plugin: Plugin<State>,
     // v: serde_json::Value,
     descriptor_name: String,
