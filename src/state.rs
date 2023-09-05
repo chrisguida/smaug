@@ -11,14 +11,15 @@ pub type State = Arc<Mutex<Smaug>>;
 pub struct Smaug {
     /// A collection of descriptors the plugin is watching.
     pub wallets: BTreeMap<String, DescriptorWallet>,
-    pub network: bitcoin::Network,
+    // pub network: bitcoin::Network,
+    pub network: String,
 }
 
 impl Smaug {
     pub fn new() -> Self {
         Self {
             wallets: BTreeMap::new(),
-            network: bitcoin::Network::Bitcoin,
+            network: bitcoin::Network::Bitcoin.to_string(),
         }
     }
 

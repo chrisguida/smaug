@@ -24,7 +24,9 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use anyhow::Ok;
-use smaug::wallet::{AddArgs, DescriptorWallet, DATADIR, UTXO_DEPOSIT_TAG, UTXO_SPENT_TAG};
+use smaug::wallet::{
+    AddArgs, DescriptorWallet, WDNetwork, DATADIR, UTXO_DEPOSIT_TAG, UTXO_SPENT_TAG,
+};
 
 use cln_plugin::{anyhow, messages, options, Builder, Error, Plugin};
 use tokio;
@@ -44,7 +46,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .option(options::ConfigOption::new(
             "wd_network",
             options::Value::OptString,
-            "Which network to use: [bitcoin, testnet, signet, regtest]",
+            "Which network to use: [bitcoin, testnet, signet, regtest, mutinynet]",
         ))
         .notification(messages::NotificationTopic::new(UTXO_DEPOSIT_TAG))
         .notification(messages::NotificationTopic::new(UTXO_SPENT_TAG))
@@ -60,11 +62,11 @@ async fn main() -> Result<(), anyhow::Error> {
     } else {
         return Ok(());
     };
-    log::info!(
+    log::debug!(
         "Configuration from CLN main daemon: {:?}",
         configured_plugin.configuration()
     );
-    log::info!(
+    log::debug!(
         "wd_network = {:?}, cln_network = {}",
         configured_plugin.option("wd_network"),
         configured_plugin.configuration().network
@@ -75,10 +77,8 @@ async fn main() -> Result<(), anyhow::Error> {
             None => configured_plugin.configuration().network,
         },
         None => configured_plugin.configuration().network,
-    }
-    .parse::<bitcoin::Network>()
-    .unwrap();
-    log::info!("network = {}", network);
+    };
+    log::debug!("network = {}", network);
     let rpc_file = configured_plugin.configuration().rpc_file;
     let p = Path::new(&rpc_file);
 
@@ -105,10 +105,14 @@ async fn main() -> Result<(), anyhow::Error> {
         },
         _ => panic!(),
     };
-    let watch_descriptor = Smaug { wallets, network };
+    let watch_descriptor = Smaug {
+        wallets,
+        network: network.clone(),
+    };
     let plugin_state = Arc::new(Mutex::new(watch_descriptor.clone()));
     plugin_state.lock().await.network = network;
     let plugin = configured_plugin.start(plugin_state).await?;
+    log::info!("Smaug started");
     plugin.join().await
 }
 
@@ -163,7 +167,7 @@ async fn parse_command(
 
     match matches {
         core::result::Result::Ok(cli) => {
-            log::info!("matches = {:?}", cli);
+            log::trace!("matches = {:?}", cli);
             match cli.command {
                 Some(c) => match c {
                     Commands::Add(args) => return add(plugin, args).await,
@@ -187,7 +191,7 @@ async fn parse_command(
                     "help_msg": format!("\n{}", e.to_string()),
                     "format-hint": "simple",
                 });
-                log::info!("{}", help_json);
+                log::trace!("{}", help_json);
                 return Ok(json!(help_json));
             }
             _ => {
@@ -195,8 +199,8 @@ async fn parse_command(
                     "error_message": e.to_string(),
                     "format-hint": "simple",
                 });
-                log::info!("args = {:?}", v);
-                log::info!("{}", error_json);
+                log::trace!("args = {:?}", v);
+                log::trace!("{}", error_json);
                 return Ok(json!(error_json));
             }
         },
@@ -211,29 +215,29 @@ async fn add(
     let mut dw = DescriptorWallet::from_args(args, plugin.state().lock().await.network.clone())
         .map_err(|e| anyhow!("error parsing args: {}", e))?;
     // dw.network = );
-    log::info!("params = {:?}", dw);
+    log::trace!("params = {:?}", dw);
 
     let wallet = dw.fetch_wallet().await?;
     let bdk_transactions_iter = wallet.transactions();
     let mut transactions = Vec::<TransactionDetails>::new();
     for bdk_transaction in bdk_transactions_iter {
-        log::info!("BDK transaction = {:?}", bdk_transaction.node.tx);
+        log::trace!("BDK transaction = {:?}", bdk_transaction.node.tx);
         transactions.push(wallet.get_tx(bdk_transaction.node.txid, true).unwrap());
     }
 
     if transactions.len() > 0 {
-        log::info!("found some transactions: {:?}", transactions);
+        log::trace!("found some transactions: {:?}", transactions);
         let new_txs = dw.update_transactions(transactions);
         if new_txs.len() > 0 {
             for tx in new_txs {
-                log::info!("new tx found!: {:?}", tx);
+                log::trace!("new tx found!: {:?}", tx);
                 dw.send_notifications_for_tx(&plugin, &wallet, tx).await?;
             }
         } else {
-            log::info!("no new txs this time");
+            log::debug!("no new txs this time");
         }
     }
-    log::info!("waiting for wallet lock");
+    log::trace!("waiting for wallet lock");
     plugin.state().lock().await.add_descriptor_wallet(&dw)?;
 
     let wallets_str = json!(plugin.state().lock().await.wallets).to_string();
@@ -251,12 +255,12 @@ async fn add(
         }))
         .await
         .map_err(|e| anyhow!("Error calling listdatastore: {:?}", e))?;
-    log::info!("wallet added");
+    log::trace!("wallet added");
     let message = format!(
         "Wallet with deterministic name {} successfully added",
         &dw.get_name()?
     );
-    log::info!("returning");
+    log::trace!("returning");
     Ok(json!(message))
 }
 
@@ -266,7 +270,7 @@ struct ListResponseItem {
     pub change_descriptor: Option<String>,
     pub birthday: Option<u32>,
     pub gap: Option<u32>,
-    pub network: Option<Network>,
+    pub network: Option<String>,
 }
 
 async fn list(
@@ -321,8 +325,8 @@ async fn delete(
 }
 
 async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Result<(), Error> {
-    log::info!("Got a block_added notification: {}", v);
-    log::info!("Smaug state!!! {:?}", plugin.state().lock().await.wallets);
+    log::trace!("Got a block_added notification: {}", v);
+    log::trace!("Smaug state!!! {:?}", plugin.state().lock().await.wallets);
 
     let descriptor_wallets = &mut plugin.state().lock().await.wallets;
     for (_dw_desc, dw) in descriptor_wallets.iter_mut() {
@@ -330,12 +334,12 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
         let bdk_transactions_iter = wallet.transactions();
         let mut transactions = Vec::<TransactionDetails>::new();
         for bdk_transaction in bdk_transactions_iter {
-            log::info!("BDK transaction = {:?}", bdk_transaction.node.tx);
+            log::trace!("BDK transaction = {:?}", bdk_transaction.node.tx);
             transactions.push(wallet.get_tx(bdk_transaction.node.txid, true).unwrap());
         }
 
         if transactions.len() > 0 {
-            log::info!(
+            log::trace!(
                 "found some new transactions in new block! : {:?}",
                 transactions
             );
@@ -345,10 +349,10 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
                     dw.send_notifications_for_tx(&plugin, &wallet, tx).await?;
                 }
             } else {
-                log::info!("no new txs this time");
+                log::debug!("no new txs this time");
             }
         } else {
-            log::info!("found no transactions");
+            log::debug!("found no transactions");
         }
     }
     Ok(())
