@@ -34,7 +34,7 @@
       defaultPackage = naersk-lib.buildPackage ./.;
 
       devShell = pkgs.mkShell {
-          buildInputs = with pkgs; [ cargo rustc rustfmt pre-commit rustPackages.clippy libsodium pkg-config clightning ];
+          buildInputs = with pkgs; [ cargo rustc rustfmt pre-commit rustPackages.clippy libsodium pkg-config openssl clightning ];
           RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
         };
     });
