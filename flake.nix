@@ -38,7 +38,7 @@
       };
 
       devShell = pkgs.mkShell {
-          buildInputs = with pkgs; [ cargo rustc rustfmt pre-commit rustPackages.clippy libsodium pkg-config openssl cln ];
+          buildInputs = with pkgs; [ bitcoin cargo rustc rustfmt pre-commit rustPackages.clippy libsodium pkg-config openssl cln ];
           RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
         };
     });
