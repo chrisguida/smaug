@@ -32,7 +32,10 @@
       };
       naersk-lib = pkgs.callPackage naersk {};
     in rec {
-      defaultPackage = naersk-lib.buildPackage ./.;
+      defaultPackage = naersk-lib.buildPackage {
+        src = ./.;
+        buildInputs = with pkgs; [ libsodium pkg-config openssl cln ];
+      };
 
       devShell = pkgs.mkShell {
           buildInputs = with pkgs; [ cargo rustc rustfmt pre-commit rustPackages.clippy libsodium pkg-config openssl cln ];
