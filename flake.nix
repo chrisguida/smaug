@@ -14,7 +14,8 @@
   }: utils.lib.eachDefaultSystem (system:
     let
       cln-overlay = final: prev: {
-        clightning = prev.clightning.overrideAttrs {
+        cln = prev.clightning.overrideAttrs {
+          version = "23.03.2";
           src = prev.fetchFromGitHub {
             owner = "niftynei";
             repo = "lightning";
@@ -34,7 +35,7 @@
       defaultPackage = naersk-lib.buildPackage ./.;
 
       devShell = pkgs.mkShell {
-          buildInputs = with pkgs; [ cargo rustc rustfmt pre-commit rustPackages.clippy libsodium pkg-config openssl clightning ];
+          buildInputs = with pkgs; [ cargo rustc rustfmt pre-commit rustPackages.clippy libsodium pkg-config openssl cln ];
           RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
         };
     });
