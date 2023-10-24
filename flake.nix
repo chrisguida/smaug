@@ -38,8 +38,19 @@
       };
 
       devShell = pkgs.mkShell {
-          buildInputs = with pkgs; [ cargo rustc rustfmt pre-commit rustPackages.clippy pkg-config openssl bitcoin clightning ];
-          RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
-        };
-    });
+        buildInputs = with pkgs; [ bash cargo rustc rustfmt pre-commit rustPackages.clippy pkg-config openssl bitcoin clightning ];
+        RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
+        shellHook = ''
+          echo "Entering devshell..."
+
+          echo "Run \`cargo build\` to build \`smaug\`."
+
+          echo "To set up two lightning nodes and a bitcoin node in regtest mode, run:"
+          echo "source ${pkgs.clightning.src}/contrib/startup_regtest.sh"
+
+          echo "Then run \`l1-cli plugin start $(pwd)/target/debug/smaug\` to start smaug on Lightning Node 1!"
+        '';
+      };
+    }
+  );
 }

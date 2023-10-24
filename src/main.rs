@@ -6,7 +6,7 @@ extern crate serde_json;
 
 use bdk::bitcoin::Network;
 use clap::error::ErrorKind;
-use clap::{arg, CommandFactory, Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use cln_rpc::model::DatastoreMode;
 use cln_rpc::{
     model::requests::{DatastoreRequest, ListdatastoreRequest},
