@@ -12,14 +12,13 @@ use bdk_esplora::{esplora_client, EsploraAsyncExt};
 use bdk_file_store::Store;
 use clap::{command, Parser};
 use cln_plugin::{Error, Plugin};
-use home::home_dir;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{collections::BTreeMap, fmt, io::Write};
+use std::{collections::BTreeMap, fmt, io::Write, path::PathBuf};
 
 use crate::state::State;
 
-pub const DATADIR: &str = ".smaug";
+pub const SMAUG_DATADIR: &str = ".smaug";
 const STOP_GAP: usize = 50;
 const PARALLEL_REQUESTS: usize = 5;
 
@@ -231,17 +230,16 @@ impl DescriptorWallet {
 
     pub async fn fetch_wallet<'a>(
         &self,
-        // dw: &DescriptorWallet,
+        db_dir: PathBuf,
     ) -> Result<Wallet<Store<'a, LocalChangeSet<KeychainKind, ConfirmationTimeAnchor>>>, Error>
     {
         log::trace!("creating path");
         let db_filename = self.get_name()?;
-        let db_path = home_dir()
-            .unwrap()
-            .join(DATADIR)
+        let db_path = db_dir
+            // .join(DATADIR)
             .join(format!("{}.db", db_filename,));
         log::trace!("searching for path: {:?}", db_path);
-        let db = Store::<bdk::wallet::ChangeSet>::new_from_path(DATADIR.as_bytes(), db_path)?;
+        let db = Store::<bdk::wallet::ChangeSet>::new_from_path(SMAUG_DATADIR.as_bytes(), db_path)?;
         log::trace!("db created!");
         // let external_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/0/*)";
         // mutinynet_descriptor = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/*)"

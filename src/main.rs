@@ -4,7 +4,6 @@
 #[macro_use]
 extern crate serde_json;
 
-use bdk::bitcoin::Network;
 use clap::error::ErrorKind;
 use clap::{CommandFactory, Parser, Subcommand};
 use cln_rpc::model::DatastoreMode;
@@ -12,36 +11,28 @@ use cln_rpc::{
     model::requests::{DatastoreRequest, ListdatastoreRequest},
     ClnRpc, Request, Response,
 };
-use home::home_dir;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use anyhow::Ok;
-use smaug::wallet::{
-    AddArgs, DescriptorWallet, WDNetwork, DATADIR, UTXO_DEPOSIT_TAG, UTXO_SPENT_TAG,
-};
+use smaug::wallet::{AddArgs, DescriptorWallet, SMAUG_DATADIR, UTXO_DEPOSIT_TAG, UTXO_SPENT_TAG};
 
 use cln_plugin::{anyhow, messages, options, Builder, Error, Plugin};
 use tokio;
 
-use bdk::{bitcoin, TransactionDetails};
+use bdk::TransactionDetails;
 use smaug::state::{Smaug, State};
 
 #[tokio::main]
 // #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), anyhow::Error> {
-    // Create data dir if it does not exist
-    fs::create_dir_all(&home_dir().unwrap().join(DATADIR)).unwrap_or_else(|e| {
-        log::error!("Cannot create data dir: {e:?}");
-        std::process::exit(1);
-    });
     let builder = Builder::new(tokio::io::stdin(), tokio::io::stdout())
         .option(options::ConfigOption::new(
             "wd_network",
@@ -78,6 +69,12 @@ async fn main() -> Result<(), anyhow::Error> {
         },
         None => configured_plugin.configuration().network,
     };
+    let ln_dir: PathBuf = configured_plugin.configuration().lightning_dir.into();
+    // Create data dir if it does not exist
+    fs::create_dir_all(ln_dir.join(SMAUG_DATADIR)).unwrap_or_else(|e| {
+        log::error!("Cannot create data dir: {e:?}");
+        std::process::exit(1);
+    });
     log::debug!("network = {}", network);
     let rpc_file = configured_plugin.configuration().rpc_file;
     let p = Path::new(&rpc_file);
@@ -108,6 +105,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let watch_descriptor = Smaug {
         wallets,
         network: network.clone(),
+        db_dir: ln_dir.join(SMAUG_DATADIR),
     };
     let plugin_state = Arc::new(Mutex::new(watch_descriptor.clone()));
     plugin_state.lock().await.network = network;
@@ -216,8 +214,9 @@ async fn add(
         .map_err(|e| anyhow!("error parsing args: {}", e))?;
     // dw.network = );
     log::trace!("params = {:?}", dw);
-
-    let wallet = dw.fetch_wallet().await?;
+    let wallet = dw
+        .fetch_wallet(plugin.state().lock().await.db_dir.clone())
+        .await?;
     let bdk_transactions_iter = wallet.transactions();
     let mut transactions = Vec::<TransactionDetails>::new();
     for bdk_transaction in bdk_transactions_iter {
@@ -330,7 +329,9 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
 
     let descriptor_wallets = &mut plugin.state().lock().await.wallets;
     for (_dw_desc, dw) in descriptor_wallets.iter_mut() {
-        let wallet = dw.fetch_wallet().await?;
+        let wallet = dw
+            .fetch_wallet(plugin.state().lock().await.db_dir.clone())
+            .await?;
         let bdk_transactions_iter = wallet.transactions();
         let mut transactions = Vec::<TransactionDetails>::new();
         for bdk_transaction in bdk_transactions_iter {
