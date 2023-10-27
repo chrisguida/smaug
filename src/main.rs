@@ -6,7 +6,7 @@ extern crate serde_json;
 
 use clap::error::ErrorKind;
 use clap::{CommandFactory, Parser, Subcommand};
-use cln_rpc::model::DatastoreMode;
+use cln_rpc::model::requests::DatastoreMode;
 use cln_rpc::{
     model::requests::{DatastoreRequest, ListdatastoreRequest},
     ClnRpc, Request, Response,
