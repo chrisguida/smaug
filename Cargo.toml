@@ -8,8 +8,6 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0"
 base64 = "0.21.2"
-# cln-plugin = { git = "https://github.com/elementsproject/lightning", version = "0.1.4" }
-# cln-plugin = { path = "../../lightning/plugins" }
 # bdk = "0.27.1"
 # bdk = { version = "0.28", default-features=false, features = ["std", "key-value-db","async-interface", "use-esplora-async"] }
 bdk = { git = "https://github.com/bitcoindevkit/bdk", version = "1.0.0-alpha.1", rev = "8f38e96e4542db2378e2e64cd9289638ee86ba1a" }
@@ -21,7 +19,9 @@ bdk_esplora = { git = "https://github.com/bitcoindevkit/bdk", rev = "8f38e96e454
 # bdk_file_store = { path = "../bdk/crates/file_store" }
 bdk_file_store ={ git = "https://github.com/bitcoindevkit/bdk", rev = "8f38e96e4542db2378e2e64cd9289638ee86ba1a" }
 clap = { version = "4.4.0", features = ["derive"] }
-cln-plugin = { git = "https://github.com/chrisguida/lightning", version = "0.1.4", branch = "feat/cln-plugin-send-notifs" }
+cln-plugin = { git = "https://github.com/elementsproject/lightning", version = "0.1.4" }
+# cln-plugin = { path = "../../lightning/plugins" }
+# cln-plugin = { git = "https://github.com/chrisguida/lightning", version = "0.1.4", branch = "feat/cln-plugin-send-notifs" }
 cln-rpc = "0.1.3"
 home = "0.5.5"
 log = "0.4.18"
