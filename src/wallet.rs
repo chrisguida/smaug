@@ -72,6 +72,19 @@ pub fn get_network_url(network: &str) -> String {
     }
 }
 
+pub fn get_network(network: Option<String>) -> Result<Network, Error> {
+    return match network {
+        Some(n) => match n.as_str() {
+            "mutinynet" => Ok(Network::Signet),
+            _ => match n.parse::<Network>() {
+                Ok(n) => Ok(n),
+                Err(e) => return Err(e.into()),
+            },
+        },
+        None => return Err(anyhow!("network is None")),
+    };
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, Parser)]
 #[command(author, version, about, long_about = None)]
 pub struct AddArgs {
@@ -209,21 +222,16 @@ impl DescriptorWallet {
         // self.transactions = transactions;
     }
 
+    pub fn get_network(&self) -> Result<Network, Error> {
+        get_network(self.network.clone())
+    }
+
     pub fn get_name(&self) -> Result<String, Error> {
-        let network = match self.network.clone() {
-            Some(n) => match n.as_str() {
-                "mutinynet" => Network::Signet,
-                _ => match n.parse::<Network>() {
-                    Ok(n) => n,
-                    Err(e) => return Err(e.into()),
-                },
-            },
-            None => return Err(anyhow!("network is None")),
-        };
+        let network = get_network(self.network.clone());
         Ok(wallet_name_from_descriptor(
             &self.descriptor,
             self.change_descriptor.as_ref(),
-            network,
+            network?,
             &Secp256k1::<All>::new(),
         )?)
     }
@@ -258,7 +266,7 @@ impl DescriptorWallet {
             &external_descriptor,
             internal_descriptor.as_ref(),
             db,
-            Network::Signet,
+            self.get_network()?,
         )?;
         log::trace!("wallet created!");
 
