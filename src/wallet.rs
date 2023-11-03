@@ -72,6 +72,19 @@ pub fn get_network_url(network: &str) -> String {
     }
 }
 
+pub fn get_network(network: Option<String>) -> Result<Network, Error> {
+    return match network {
+        Some(n) => match n.as_str() {
+            "mutinynet" => Ok(Network::Signet),
+            _ => match n.parse::<Network>() {
+                Ok(n) => Ok(n),
+                Err(e) => return Err(e.into()),
+            },
+        },
+        None => return Err(anyhow!("network is None")),
+    };
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, Parser)]
 #[command(author, version, about, long_about = None)]
 pub struct AddArgs {
@@ -209,21 +222,16 @@ impl DescriptorWallet {
         // self.transactions = transactions;
     }
 
+    pub fn get_network(&self) -> Result<Network, Error> {
+        get_network(self.network.clone())
+    }
+
     pub fn get_name(&self) -> Result<String, Error> {
-        let network = match self.network.clone() {
-            Some(n) => match n.as_str() {
-                "mutinynet" => Network::Signet,
-                _ => match n.parse::<Network>() {
-                    Ok(n) => n,
-                    Err(e) => return Err(e.into()),
-                },
-            },
-            None => return Err(anyhow!("network is None")),
-        };
+        let network = get_network(self.network.clone());
         Ok(wallet_name_from_descriptor(
             &self.descriptor,
             self.change_descriptor.as_ref(),
-            network,
+            network?,
             &Secp256k1::<All>::new(),
         )?)
     }
@@ -233,14 +241,14 @@ impl DescriptorWallet {
         db_dir: PathBuf,
     ) -> Result<Wallet<Store<'a, LocalChangeSet<KeychainKind, ConfirmationTimeAnchor>>>, Error>
     {
-        log::trace!("creating path");
+        log::info!("creating path");
         let db_filename = self.get_name()?;
         let db_path = db_dir
             // .join(DATADIR)
             .join(format!("{}.db", db_filename,));
-        log::trace!("searching for path: {:?}", db_path);
+        log::info!("searching for path: {:?}", db_path);
         let db = Store::<bdk::wallet::ChangeSet>::new_from_path(SMAUG_DATADIR.as_bytes(), db_path)?;
-        log::trace!("db created!");
+        log::info!("db created!");
         // let external_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/0/*)";
         // mutinynet_descriptor = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/*)"
         let _mutinynet_descriptor_ext = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/0/*)";
@@ -258,16 +266,16 @@ impl DescriptorWallet {
             &external_descriptor,
             internal_descriptor.as_ref(),
             db,
-            Network::Signet,
+            self.get_network()?,
         )?;
-        log::trace!("wallet created!");
+        log::info!("wallet created!");
 
         let balance = wallet.get_balance();
-        log::trace!("Wallet balance before syncing: {} sats", balance.total());
+        log::info!("Wallet balance before syncing: {} sats", balance.total());
 
-        log::trace!("Syncing...");
-        log::debug!("using network: {}", json!(self.network).as_str().unwrap());
-        log::debug!(
+        log::info!("Syncing...");
+        log::info!("using network: {}", json!(self.network).as_str().unwrap());
+        log::info!(
             "using esplora url: {}",
             get_network_url(json!(self.network).as_str().unwrap()).as_str()
         );
@@ -288,14 +296,14 @@ impl DescriptorWallet {
                 let mut stdout = std::io::stdout();
                 let k_spks = k_spks
                     .inspect(move |(spk_i, _)| match once.take() {
-                        Some(_) => log::debug!("\nScanning keychain [{:?}]", k),
-                        None => log::trace!(" {:<3}", spk_i),
+                        Some(_) => log::info!("\nScanning keychain [{:?}]", k),
+                        None => log::info!(" {:<3}", spk_i),
                     })
                     .inspect(move |_| stdout.flush().expect("must flush"));
                 (k, k_spks)
             })
             .collect();
-        log::trace!("Finished scanning");
+        log::info!("Finished scanning");
         let update = client
             .scan(
                 local_chain,
@@ -310,7 +318,7 @@ impl DescriptorWallet {
         wallet.commit()?;
 
         let balance = wallet.get_balance();
-        log::trace!("Wallet balance after syncing: {} sats", balance.total());
+        log::info!("Wallet balance after syncing: {} sats", balance.total());
         return Ok(wallet);
     }
 
@@ -334,7 +342,7 @@ impl DescriptorWallet {
                                 let acct = format!("smaug:{}", self.get_name()?);
                                 let amount = po.value;
                                 let outpoint = format!("{}", input.previous_output.to_string());
-                                log::trace!("outpoint = {}", format!("{}", outpoint));
+                                log::info!("outpoint = {}", format!("{}", outpoint));
                                 let onchain_spend = json!({
                                     "account": acct,
                                     "outpoint": outpoint,
@@ -344,7 +352,7 @@ impl DescriptorWallet {
                                     "timestamp": format!("{}", time),
                                     "blockheight": format!("{}", height),
                                 });
-                                log::trace!("INSIDE SEND SPEND NOTIFICATION ON SMAUG SIDE");
+                                log::info!("INSIDE SEND SPEND NOTIFICATION ON SMAUG SIDE");
                                 let cloned_plugin = plugin.clone();
                                 tokio::spawn(async move {
                                     if let Err(e) = cloned_plugin
@@ -360,7 +368,7 @@ impl DescriptorWallet {
                             }
                         }
                     } else {
-                        log::trace!("Transaction prevout not found");
+                        log::info!("Transaction prevout not found");
                     }
                 }
 
@@ -382,7 +390,7 @@ impl DescriptorWallet {
                             }
                             let amount = output.value;
                             let outpoint = format!("{}:{}", tx.txid.to_string(), vout.to_string());
-                            log::trace!(
+                            log::info!(
                                 "outpoint = {}",
                                 format!("{}:{}", tx.txid.to_string(), vout.to_string())
                             );
@@ -396,7 +404,7 @@ impl DescriptorWallet {
                                     "timestamp": format!("{}", time),
                                     "blockheight": format!("{}", height),
                             });
-                            log::trace!("INSIDE SEND DEPOSIT NOTIFICATION ON SMAUG SIDE");
+                            log::info!("INSIDE SEND DEPOSIT NOTIFICATION ON SMAUG SIDE");
                             let cloned_plugin = plugin.clone();
                             tokio::spawn(async move {
                                 if let Err(e) = cloned_plugin
@@ -414,7 +422,7 @@ impl DescriptorWallet {
                 }
             }
             None => {
-                log::debug!("TransactionDetails is missing a Transaction");
+                log::info!("TransactionDetails is missing a Transaction");
             }
         }
         Ok(())
@@ -454,7 +462,7 @@ impl DescriptorWallet {
                                 let amount = output.value;
                                 let outpoint =
                                     format!("{}:{}", tx.txid.to_string(), vout.to_string());
-                                log::trace!(
+                                log::info!(
                                     "outpoint = {}",
                                     format!("{}:{}", tx.txid.to_string(), vout.to_string())
                                 );
@@ -468,7 +476,7 @@ impl DescriptorWallet {
                                         "timestamp": format!("{}", time),
                                         "blockheight": format!("{}", height),
                                 });
-                                log::trace!("INSIDE SEND DEPOSIT NOTIFICATION ON SMAUG SIDE");
+                                log::info!("INSIDE SEND DEPOSIT NOTIFICATION ON SMAUG SIDE");
                                 let cloned_plugin = plugin.clone();
                                 tokio::spawn(async move {
                                     if let Err(e) = cloned_plugin
@@ -487,7 +495,7 @@ impl DescriptorWallet {
                 }
             }
             None => {
-                log::debug!("TransactionDetails is missing a Transaction");
+                log::info!("TransactionDetails is missing a Transaction");
             }
         }
         Ok(())
@@ -517,7 +525,7 @@ impl DescriptorWallet {
                                     let acct = format!("smaug:{}", self.get_name()?);
                                     let amount = po.value;
                                     let outpoint = format!("{}", input.previous_output.to_string());
-                                    log::trace!("outpoint = {}", format!("{}", outpoint));
+                                    log::info!("outpoint = {}", format!("{}", outpoint));
                                     let onchain_spend = json!({
                                         "account": acct,
                                         "outpoint": outpoint,
@@ -527,7 +535,7 @@ impl DescriptorWallet {
                                         "timestamp": format!("{}", time),
                                         "blockheight": format!("{}", height),
                                     });
-                                    log::trace!("INSIDE SEND SPEND NOTIFICATION ON SMAUG SIDE");
+                                    log::info!("INSIDE SEND SPEND NOTIFICATION ON SMAUG SIDE");
                                     let cloned_plugin = plugin.clone();
                                     tokio::spawn(async move {
                                         if let Err(e) = cloned_plugin
@@ -547,7 +555,7 @@ impl DescriptorWallet {
                             }
                         }
                     } else {
-                        log::debug!("Transaction prevout not found");
+                        log::info!("Transaction prevout not found");
                     }
                 }
 
@@ -572,7 +580,7 @@ impl DescriptorWallet {
                             }
                             let amount = output.value;
                             let outpoint = format!("{}:{}", tx.txid.to_string(), vout.to_string());
-                            log::trace!(
+                            log::info!(
                                 "outpoint = {}",
                                 format!("{}:{}", tx.txid.to_string(), vout.to_string())
                             );
@@ -586,7 +594,7 @@ impl DescriptorWallet {
                                     "timestamp": format!("{}", time),
                                     "blockheight": format!("{}", height),
                             });
-                            log::trace!("INSIDE SEND DEPOSIT NOTIFICATION ON SMAUG SIDE");
+                            log::info!("INSIDE SEND DEPOSIT NOTIFICATION ON SMAUG SIDE");
                             let cloned_plugin = plugin.clone();
                             tokio::spawn(async move {
                                 if let Err(e) = cloned_plugin
@@ -604,7 +612,7 @@ impl DescriptorWallet {
                 }
             }
             None => {
-                log::debug!("TransactionDetails is missing a Transaction");
+                log::info!("TransactionDetails is missing a Transaction");
             }
         }
         Ok(())
@@ -616,12 +624,12 @@ impl DescriptorWallet {
         wallet: &Wallet<Store<'a, LocalChangeSet<KeychainKind, ConfirmationTimeAnchor>>>,
         tx: TransactionDetails,
     ) -> Result<(), Error> {
-        log::debug!("sending notifs for txid/tx: {:?} {:?}", tx.txid, tx);
+        log::info!("sending notifs for txid/tx: {:?} {:?}", tx.txid, tx);
         // we own all inputs
         if tx.clone().transaction.unwrap().input.iter().all(|x| {
             match wallet.tx_graph().get_txout(x.previous_output) {
                 Some(o) => {
-                    log::trace!(
+                    log::info!(
                         "output is mine?: {:?} {:?}",
                         o,
                         wallet.is_mine(&o.script_pubkey)
@@ -629,19 +637,19 @@ impl DescriptorWallet {
                     wallet.is_mine(&o.script_pubkey)
                 }
                 None => {
-                    log::trace!("output not found in tx graph: {:?}", x.previous_output);
+                    log::info!("output not found in tx graph: {:?}", x.previous_output);
                     false
                 }
             }
         }) {
-            log::debug!("sending spend notif");
+            log::info!("sending spend notif");
             self.spend_tx_notify(plugin, wallet, &tx).await?;
         } else
         // we own no inputs
         if !tx.clone().transaction.unwrap().input.iter().any(|x| {
             match wallet.tx_graph().get_txout(x.previous_output) {
                 Some(o) => {
-                    log::trace!(
+                    log::info!(
                         "output is mine?: {:?} {:?}",
                         o,
                         wallet.is_mine(&o.script_pubkey)
@@ -649,17 +657,17 @@ impl DescriptorWallet {
                     wallet.is_mine(&o.script_pubkey)
                 }
                 None => {
-                    log::trace!("output not found in tx graph: {:?}", x.previous_output);
+                    log::info!("output not found in tx graph: {:?}", x.previous_output);
                     false
                 }
             }
         }) {
-            log::debug!("sending deposit notif");
+            log::info!("sending deposit notif");
             self.receive_tx_notify(plugin, wallet, &tx).await?;
         }
         // we own some inputs but not others
         else {
-            log::debug!("sending shared notif");
+            log::info!("sending shared notif");
             self.shared_tx_notify(plugin, wallet, &tx).await?;
         }
 
@@ -678,10 +686,10 @@ impl TryFrom<serde_json::Value> for DescriptorWallet {
     type Error = WatchError;
 
     fn try_from(value: serde_json::Value) -> Result<Self, Self::Error> {
-        log::trace!("entering try_from");
+        log::info!("entering try_from");
         match value {
             serde_json::Value::Array(a) => {
-                log::trace!("try_from: array detected = {:?}", a);
+                log::info!("try_from: array detected = {:?}", a);
                 let param_count = a.len();
 
                 match param_count {
@@ -689,7 +697,7 @@ impl TryFrom<serde_json::Value> for DescriptorWallet {
                     1..=4 => {
                         let descriptor = a.get(0).unwrap().as_str().ok_or_else(|| WatchError::InvalidDescriptor("descriptor must be a string".to_string()))?;
                         // let change_descriptor = Some(a.get(1).unwrap().as_str().ok_or_else(|| WatchError::InvalidChangeDescriptor("change_descriptor must be a string".to_string()))?);
-                        log::trace!("try_from array: change_descriptor = {:?}", a.get(1));
+                        log::info!("try_from array: change_descriptor = {:?}", a.get(1));
                         let change_descriptor = if let Some(cd) = a.get(1) {
                             Some(cd.as_str().ok_or_else(|| WatchError::InvalidChangeDescriptor(format!("change_descriptor must be a string. Received: {cd}")))?)
                         } else {
@@ -712,7 +720,7 @@ impl TryFrom<serde_json::Value> for DescriptorWallet {
                 }
             },
             serde_json::Value::Object(m) => {
-                log::trace!("try_from: object detected");
+                log::info!("try_from: object detected");
                 let allowed_keys = ["descriptor", "change_descriptor", "birthday", "gap"];
                 let param_count = m.len();
 
