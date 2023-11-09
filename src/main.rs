@@ -4,6 +4,7 @@
 #[macro_use]
 extern crate serde_json;
 
+use bitcoincore_rpc::bitcoincore_rpc_json::ScanBlocksRequest;
 use clap::error::ErrorKind;
 use clap::{CommandFactory, Parser, Subcommand};
 use cln_rpc::model::DatastoreMode;
@@ -30,14 +31,53 @@ use tokio;
 use bdk::TransactionDetails;
 use smaug::state::{Smaug, State};
 
+
+fn scanblocks<'a>(
+    brpc_user: String,
+    brpc_pass: String,
+) -> Result<(), Error>
+{
+    // let external_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/0/*)";
+    // mutinynet_descriptor = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/*)"
+    let _mutinynet_descriptor_ext = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/0/*)";
+    let _mutinynet_descriptor_int = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/1/*)";
+    let _mutinynet_descriptor_ext_2 = "wpkh(tprv8ZgxMBicQKsPeRye8MhHA8hLxMuomycmGYXyRs7zViNck2VJsCJMTPt81Que8qp3PyPgQRnN7Gb1JyBVBKgj8AKEoEmmYxYDwzZJ63q1yjA/84'/0'/0'/0/*)";
+    let _mutinynet_descriptor_int_2 = "wpkh(tprv8ZgxMBicQKsPeRye8MhHA8hLxMuomycmGYXyRs7zViNck2VJsCJMTPt81Que8qp3PyPgQRnN7Gb1JyBVBKgj8AKEoEmmYxYDwzZJ63q1yjA/84'/0'/0'/1/*)";
+
+    extern crate bitcoincore_rpc;
+
+    use bitcoincore_rpc::{Auth, Client, RpcApi};
+
+    let rpc = Client::new("http://localhost:18443",
+                        Auth::UserPass(brpc_user, brpc_pass)
+                        // Auth::CookieFile(PathBuf::from("/home/cguida/.bitcoin/regtest/.cookie"))
+                      ).unwrap();
+    let descriptor = ScanBlocksRequest::Extended { desc:_mutinynet_descriptor_ext.to_string(), range: None };
+    let descriptors = &[descriptor];
+    let res = rpc.scan_blocks_blocking(descriptors);
+    log::info!("scanblocks result: {:?}", res.unwrap());
+
+    return Ok(());
+}
+
 #[tokio::main]
 // #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), anyhow::Error> {
     let builder = Builder::new(tokio::io::stdin(), tokio::io::stdout())
         .option(options::ConfigOption::new(
-            "wd_network",
+            "smaug_network",
             options::Value::OptString,
             "Which network to use: [bitcoin, testnet, signet, regtest, mutinynet]",
+        ))
+        .option(options::ConfigOption::new(
+            "smaug_brpc_user",
+            options::Value::OptString,
+            "Bitcoind RPC user (Required)",
+        ))
+        .option(options::ConfigOption::new(
+            "smaug_brpc_pass",
+            options::Value::OptString,
+            "Bitcoind RPC password (Required)",
         ))
         .notification(messages::NotificationTopic::new(UTXO_DEPOSIT_TAG))
         .notification(messages::NotificationTopic::new(UTXO_SPENT_TAG))
@@ -58,16 +98,30 @@ async fn main() -> Result<(), anyhow::Error> {
         configured_plugin.configuration()
     );
     log::debug!(
-        "wd_network = {:?}, cln_network = {}",
-        configured_plugin.option("wd_network"),
+        "smaug_network = {:?}, cln_network = {}",
+        configured_plugin.option("smaug_network"),
         configured_plugin.configuration().network
     );
-    let network = match configured_plugin.option("wd_network") {
-        Some(wd_network) => match wd_network.as_str() {
+    let network = match configured_plugin.option("smaug_network") {
+        Some(smaug_network) => match smaug_network.as_str() {
             Some(wdn) => wdn.to_owned(),
             None => configured_plugin.configuration().network,
         },
         None => configured_plugin.configuration().network,
+    };
+    let brpc_user = match configured_plugin.option("smaug_brpc_user") {
+        Some(smaug_brpc_user) => match smaug_brpc_user.as_str() {
+            Some(wdn) => wdn.to_owned(),
+            None => {return Err(anyhow!("must specify smaug_brpc_user"))},
+        },
+        None => {return Err(anyhow!("must specify smaug_brpc_user (your bitcoind instance rpcuser)"))},
+    };
+    let brpc_pass = match configured_plugin.option("smaug_brpc_pass") {
+        Some(smaug_brpc_pass) => match smaug_brpc_pass.as_str() {
+            Some(wdn) => wdn.to_owned(),
+            None => {return Err(anyhow!("must specify smaug_brpc_pass (your bitcoind instance rpcpassword)"))},
+        },
+        None => {return Err(anyhow!("must specify smaug_brpc_user"))},
     };
     let ln_dir: PathBuf = configured_plugin.configuration().lightning_dir.into();
     // Create data dir if it does not exist
@@ -105,6 +159,8 @@ async fn main() -> Result<(), anyhow::Error> {
     let watch_descriptor = Smaug {
         wallets,
         network: network.clone(),
+        brpc_user: brpc_user.clone(),
+        brpc_pass: brpc_pass.clone(),
         db_dir: ln_dir.join(SMAUG_DATADIR),
     };
     let plugin_state = Arc::new(Mutex::new(watch_descriptor.clone()));
@@ -276,7 +332,11 @@ async fn list(
     plugin: Plugin<State>,
     // _v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
-    let wallets = &plugin.state().lock().await.wallets;
+    let state = &plugin.state().lock().await;
+    let brpc_user = state.brpc_user.clone();
+    let brpc_pass = state.brpc_pass.clone();
+    let wallets = state.wallets.clone();
+    scanblocks(brpc_user, brpc_pass)?;
     let mut result = BTreeMap::<String, ListResponseItem>::new();
     for (wallet_name, wallet) in wallets {
         result.insert(
