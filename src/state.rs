@@ -13,6 +13,10 @@ pub struct Smaug {
     pub wallets: BTreeMap<String, DescriptorWallet>,
     // The network relevant to our wallets
     pub network: String,
+    // Bitcoind RPC user
+    pub brpc_user: String,
+    // Bitcoind RPC password
+    pub brpc_pass: String,
     // The db path relevant to our wallets
     pub db_dir: PathBuf,
 }
@@ -22,6 +26,8 @@ impl Smaug {
         Self {
             wallets: BTreeMap::new(),
             network: bitcoin::Network::Bitcoin.to_string(),
+            brpc_user: String::from("bitcoin"),
+            brpc_pass: String::from("password"),
             db_dir: PathBuf::new(),
         }
     }
