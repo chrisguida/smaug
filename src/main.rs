@@ -20,6 +20,7 @@ use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 
 use anyhow::Ok;
@@ -31,12 +32,7 @@ use tokio;
 use bdk::TransactionDetails;
 use smaug::state::{Smaug, State};
 
-
-fn scanblocks<'a>(
-    brpc_user: String,
-    brpc_pass: String,
-) -> Result<(), Error>
-{
+fn scanblocks<'a>(brpc_user: String, brpc_pass: String) -> Result<(), Error> {
     // let external_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/0/*)";
     // mutinynet_descriptor = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/*)"
     let _mutinynet_descriptor_ext = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/0/*)";
@@ -48,11 +44,19 @@ fn scanblocks<'a>(
 
     use bitcoincore_rpc::{Auth, Client, RpcApi};
 
-    let rpc = Client::new("http://localhost:18443",
-                        Auth::UserPass(brpc_user, brpc_pass)
-                        // Auth::CookieFile(PathBuf::from("/home/cguida/.bitcoin/regtest/.cookie"))
-                      ).unwrap();
-    let descriptor = ScanBlocksRequest::Extended { desc:_mutinynet_descriptor_ext.to_string(), range: None };
+    let brpc_host = "127.0.0.1";
+    let brpc_port = 18443;
+
+    let rpc = Client::new_with_timeout(
+        &format!("http://{}:{}", brpc_host, brpc_port),
+        Auth::UserPass(brpc_user, brpc_pass), // Auth::CookieFile(PathBuf::from("/home/cguida/.bitcoin/regtest/.cookie"))
+        Duration::from_secs(3600),
+    )
+    .unwrap();
+    let descriptor = ScanBlocksRequest::Extended {
+        desc: _mutinynet_descriptor_ext.to_string(),
+        range: None,
+    };
     let descriptors = &[descriptor];
     let res = rpc.scan_blocks_blocking(descriptors);
     log::info!("scanblocks result: {:?}", res.unwrap());
@@ -112,16 +116,24 @@ async fn main() -> Result<(), anyhow::Error> {
     let brpc_user = match configured_plugin.option("smaug_brpc_user") {
         Some(smaug_brpc_user) => match smaug_brpc_user.as_str() {
             Some(wdn) => wdn.to_owned(),
-            None => {return Err(anyhow!("must specify smaug_brpc_user"))},
+            None => return Err(anyhow!("must specify smaug_brpc_user")),
         },
-        None => {return Err(anyhow!("must specify smaug_brpc_user (your bitcoind instance rpcuser)"))},
+        None => {
+            return Err(anyhow!(
+                "must specify smaug_brpc_user (your bitcoind instance rpcuser)"
+            ))
+        }
     };
     let brpc_pass = match configured_plugin.option("smaug_brpc_pass") {
         Some(smaug_brpc_pass) => match smaug_brpc_pass.as_str() {
             Some(wdn) => wdn.to_owned(),
-            None => {return Err(anyhow!("must specify smaug_brpc_pass (your bitcoind instance rpcpassword)"))},
+            None => {
+                return Err(anyhow!(
+                    "must specify smaug_brpc_pass (your bitcoind instance rpcpassword)"
+                ))
+            }
         },
-        None => {return Err(anyhow!("must specify smaug_brpc_user"))},
+        None => return Err(anyhow!("must specify smaug_brpc_user")),
     };
     let ln_dir: PathBuf = configured_plugin.configuration().lightning_dir.into();
     // Create data dir if it does not exist

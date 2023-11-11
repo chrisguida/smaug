@@ -241,7 +241,6 @@ dependencies = [
 [[package]]
 name = "bitcoincore-rpc"
 version = "0.17.0"
-source = "git+https://github.com/chrisguida/rust-bitcoincore-rpc?branch=feat/scanblocks#23806125586e999a48429d57d2d94a2a3cab696b"
 dependencies = [
  "bitcoin-private",
  "bitcoincore-rpc-json",
@@ -254,7 +253,6 @@ dependencies = [
 [[package]]
 name = "bitcoincore-rpc-json"
 version = "0.17.0"
-source = "git+https://github.com/chrisguida/rust-bitcoincore-rpc?branch=feat/scanblocks#23806125586e999a48429d57d2d94a2a3cab696b"
 dependencies = [
  "bitcoin 0.30.1",
  "bitcoin-private",
