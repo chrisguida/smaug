@@ -12,7 +12,9 @@ use bdk_esplora::{esplora_client, EsploraAsyncExt};
 use bdk_file_store::Store;
 use bitcoincore_rpc::{
     bitcoin::BlockHash,
-    bitcoincore_rpc_json::{ScanBlocksRequest, ScanBlocksResult},
+    bitcoincore_rpc_json::{
+        ScanBlocksOptions, ScanBlocksRequest, ScanBlocksRequestDescriptor, ScanBlocksResult,
+    },
 };
 use clap::{command, Parser};
 use cln_plugin::{Error, Plugin};
@@ -345,9 +347,6 @@ impl DescriptorWallet {
         let _mutinynet_descriptor_int = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/1/*)";
         let _mutinynet_descriptor_ext_2 = "wpkh(tprv8ZgxMBicQKsPeRye8MhHA8hLxMuomycmGYXyRs7zViNck2VJsCJMTPt81Que8qp3PyPgQRnN7Gb1JyBVBKgj8AKEoEmmYxYDwzZJ63q1yjA/84'/0'/0'/0/*)";
         let _mutinynet_descriptor_int_2 = "wpkh(tprv8ZgxMBicQKsPeRye8MhHA8hLxMuomycmGYXyRs7zViNck2VJsCJMTPt81Que8qp3PyPgQRnN7Gb1JyBVBKgj8AKEoEmmYxYDwzZJ63q1yjA/84'/0'/0'/1/*)";
-        let nifty_mainnet_descriptor = "wsh(sortedmulti(2,[40c37b12/58'/0'/0'/2']xpub6FNNNqYaptuqxRkpa63obgb3Agy9hrtSkReQ4mrNhCoQBRSia6EN7kdYEZsSJK5ccEzpfpPCMcardC8Q3HEPJnE9hRCFGTKRz1KcPVSmprB/0/*,[adbeab5e/58'/0'/0'/2']xpub6ETPKtSyEY14DciERKCyd4g5YT7Cdn6zFAngcNRCH6K4Rn3ccp1GYXCkm3uawmHE5bhHgdgctGosNaqnZNvVchB3BNgbTY895WTShzXe4Fj/0/*,[d2903891/58'/0'/0'/2']xpub6F7yv4S2GMr4rffSPTpQJauPer2JhGhuj9kR9Js4AbwDdctvES5gVtAV8d3iQReKhF9JzVihJTKKRfGoNy4TXvJsPj2wmvDrTTXZ7aWdG2Y/0/*))#vwave986";
-
-        extern crate bitcoincore_rpc;
 
         use bitcoincore_rpc::{Auth, Client, RpcApi};
 
@@ -357,14 +356,21 @@ impl DescriptorWallet {
             Duration::from_secs(3600),
         )
         .unwrap();
-        // let descriptor = ScanBlocksRequest::Extended {
-        //     desc: nifty_mainnet_descriptor.to_string(),
-        //     range: None,
-        // };
-        // let descriptor = ScanBlocksRequest::Single(nifty_mainnet_descriptor.to_string());
-        let descriptor = ScanBlocksRequest::Single(self.descriptor.clone());
+        let descriptor = ScanBlocksRequestDescriptor::Extended {
+            desc: self.descriptor.clone().to_string(),
+            range: None,
+        };
         let descriptors = &[descriptor];
-        let res = rpc.scan_blocks_blocking(descriptors);
+        let request = ScanBlocksRequest {
+            scanobjects: descriptors,
+            start_height: None,
+            stop_height: None,
+            filtertype: None,
+            options: Some(ScanBlocksOptions {
+                filter_false_positives: Some(true),
+            }),
+        };
+        let res = rpc.scan_blocks_blocking(request);
         log::info!("scanblocks result: {:?}", res.unwrap());
 
         return Ok(());
