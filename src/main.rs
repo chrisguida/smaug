@@ -23,7 +23,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 
-use anyhow::Ok;
+// use anyhow::Ok;
 use smaug::wallet::{AddArgs, DescriptorWallet, SMAUG_DATADIR, UTXO_DEPOSIT_TAG, UTXO_SPENT_TAG};
 
 use cln_plugin::{anyhow, messages, options, Builder, Error, Plugin};
@@ -32,39 +32,40 @@ use tokio;
 use bdk::TransactionDetails;
 use smaug::state::{Smaug, State};
 
-fn scanblocks<'a>(
-    brpc_host: String,
-    brpc_port: u16,
-    brpc_user: String,
-    brpc_pass: String,
-) -> Result<(), Error> {
-    // let external_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/0/*)";
-    // mutinynet_descriptor = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/*)"
-    let _mutinynet_descriptor_ext = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/0/*)";
-    let _mutinynet_descriptor_int = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/1/*)";
-    let _mutinynet_descriptor_ext_2 = "wpkh(tprv8ZgxMBicQKsPeRye8MhHA8hLxMuomycmGYXyRs7zViNck2VJsCJMTPt81Que8qp3PyPgQRnN7Gb1JyBVBKgj8AKEoEmmYxYDwzZJ63q1yjA/84'/0'/0'/0/*)";
-    let _mutinynet_descriptor_int_2 = "wpkh(tprv8ZgxMBicQKsPeRye8MhHA8hLxMuomycmGYXyRs7zViNck2VJsCJMTPt81Que8qp3PyPgQRnN7Gb1JyBVBKgj8AKEoEmmYxYDwzZJ63q1yjA/84'/0'/0'/1/*)";
+// fn scanblocks<'a>(
+//     brpc_host: String,
+//     brpc_port: u16,
+//     brpc_user: String,
+//     brpc_pass: String,
+// ) -> Result<(), Error> {
+//     // let external_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/0/*)";
+//     // mutinynet_descriptor = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/*)"
+//     let _mutinynet_descriptor_ext = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/0/*)";
+//     let _mutinynet_descriptor_int = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/1/*)";
+//     let _mutinynet_descriptor_ext_2 = "wpkh(tprv8ZgxMBicQKsPeRye8MhHA8hLxMuomycmGYXyRs7zViNck2VJsCJMTPt81Que8qp3PyPgQRnN7Gb1JyBVBKgj8AKEoEmmYxYDwzZJ63q1yjA/84'/0'/0'/0/*)";
+//     let _mutinynet_descriptor_int_2 = "wpkh(tprv8ZgxMBicQKsPeRye8MhHA8hLxMuomycmGYXyRs7zViNck2VJsCJMTPt81Que8qp3PyPgQRnN7Gb1JyBVBKgj8AKEoEmmYxYDwzZJ63q1yjA/84'/0'/0'/1/*)";
+//     let nifty_mainnet_descriptor = "wsh(sortedmulti(2,[40c37b12/58'/0'/0'/2']xpub6FNNNqYaptuqxRkpa63obgb3Agy9hrtSkReQ4mrNhCoQBRSia6EN7kdYEZsSJK5ccEzpfpPCMcardC8Q3HEPJnE9hRCFGTKRz1KcPVSmprB/0/*,[adbeab5e/58'/0'/0'/2']xpub6ETPKtSyEY14DciERKCyd4g5YT7Cdn6zFAngcNRCH6K4Rn3ccp1GYXCkm3uawmHE5bhHgdgctGosNaqnZNvVchB3BNgbTY895WTShzXe4Fj/0/*,[d2903891/58'/0'/0'/2']xpub6F7yv4S2GMr4rffSPTpQJauPer2JhGhuj9kR9Js4AbwDdctvES5gVtAV8d3iQReKhF9JzVihJTKKRfGoNy4TXvJsPj2wmvDrTTXZ7aWdG2Y/0/*))#vwave986";
 
-    extern crate bitcoincore_rpc;
+//     extern crate bitcoincore_rpc;
 
-    use bitcoincore_rpc::{Auth, Client, RpcApi};
+//     use bitcoincore_rpc::{Auth, Client, RpcApi};
 
-    let rpc = Client::new_with_timeout(
-        &format!("http://{}:{}", brpc_host, brpc_port),
-        Auth::UserPass(brpc_user, brpc_pass), // Auth::CookieFile(PathBuf::from("/home/cguida/.bitcoin/regtest/.cookie"))
-        Duration::from_secs(3600),
-    )
-    .unwrap();
-    let descriptor = ScanBlocksRequest::Extended {
-        desc: _mutinynet_descriptor_ext.to_string(),
-        range: None,
-    };
-    let descriptors = &[descriptor];
-    let res = rpc.scan_blocks_blocking(descriptors);
-    log::info!("scanblocks result: {:?}", res.unwrap());
+//     let rpc = Client::new_with_timeout(
+//         &format!("http://{}:{}", brpc_host, brpc_port),
+//         Auth::UserPass(brpc_user, brpc_pass), // Auth::CookieFile(PathBuf::from("/home/cguida/.bitcoin/regtest/.cookie"))
+//         Duration::from_secs(3600),
+//     )
+//     .unwrap();
+//     let descriptor = ScanBlocksRequest::Extended {
+//         desc: nifty_mainnet_descriptor.to_string(),
+//         range: None,
+//     };
+//     let descriptors = &[descriptor];
+//     let res = rpc.scan_blocks_blocking(descriptors);
+//     log::info!("scanblocks result: {:?}", res.unwrap());
 
-    return Ok(());
-}
+//     return Ok(());
+// }
 
 #[tokio::main]
 // #[tokio::main(flavor = "current_thread")]
@@ -318,31 +319,47 @@ async fn add(
         .map_err(|e| anyhow!("error parsing args: {}", e))?;
     // dw.network = );
     log::trace!("params = {:?}", dw);
-    let wallet = dw
-        .fetch_wallet(plugin.state().lock().await.db_dir.clone())
-        .await?;
-    let bdk_transactions_iter = wallet.transactions();
-    let mut transactions = Vec::<TransactionDetails>::new();
-    for bdk_transaction in bdk_transactions_iter {
-        log::trace!("BDK transaction = {:?}", bdk_transaction.node.tx);
-        transactions.push(wallet.get_tx(bdk_transaction.node.txid, true).unwrap());
-    }
-
-    if transactions.len() > 0 {
-        log::trace!("found some transactions: {:?}", transactions);
-        let new_txs = dw.update_transactions(transactions);
-        if new_txs.len() > 0 {
-            for tx in new_txs {
-                log::trace!("new tx found!: {:?}", tx);
-                dw.send_notifications_for_tx(&plugin, &wallet, tx).await?;
+    {
+        let state = &plugin.state().lock().await;
+        let brpc_host = state.brpc_host.clone();
+        let brpc_port = state.brpc_port.clone();
+        let brpc_user = state.brpc_user.clone();
+        let brpc_pass = state.brpc_pass.clone();
+        match dw.scanblocks(brpc_host, brpc_port, brpc_user, brpc_pass) {
+            Ok(_) => {
+                log::info!("scan succeeded");
             }
-        } else {
-            log::debug!("no new txs this time");
-        }
+            Err(e) => {
+                log::info!("scan failed: {}", e);
+            }
+        };
     }
-    log::trace!("waiting for wallet lock");
+    // let wallet = dw
+    //     .fetch_wallet(plugin.state().lock().await.db_dir.clone())
+    //     .await?;
+    // let bdk_transactions_iter = wallet.transactions();
+    // let mut transactions = Vec::<TransactionDetails>::new();
+    // for bdk_transaction in bdk_transactions_iter {
+    //     log::trace!("BDK transaction = {:?}", bdk_transaction.node.tx);
+    //     transactions.push(wallet.get_tx(bdk_transaction.node.txid, true).unwrap());
+    // }
+
+    // if transactions.len() > 0 {
+    //     log::trace!("found some transactions: {:?}", transactions);
+    //     let new_txs = dw.update_transactions(transactions);
+    //     if new_txs.len() > 0 {
+    //         for tx in new_txs {
+    //             log::trace!("new tx found!: {:?}", tx);
+    //             dw.send_notifications_for_tx(&plugin, &wallet, tx).await?;
+    //         }
+    //     } else {
+    //         log::debug!("no new txs this time");
+    //     }
+    // }
+    log::info!("waiting for wallet lock");
     plugin.state().lock().await.add_descriptor_wallet(&dw)?;
 
+    log::info!("add_descriptor_wallet");
     let wallets_str = json!(plugin.state().lock().await.wallets).to_string();
     let rpc_file = plugin.configuration().rpc_file;
     let p = Path::new(&rpc_file);
@@ -358,12 +375,12 @@ async fn add(
         }))
         .await
         .map_err(|e| anyhow!("Error calling listdatastore: {:?}", e))?;
-    log::trace!("wallet added");
+    log::info!("wallet added");
     let message = format!(
         "Wallet with deterministic name {} successfully added",
         &dw.get_name()?
     );
-    log::trace!("returning");
+    log::info!("returning");
     Ok(json!(message))
 }
 
@@ -381,14 +398,8 @@ async fn list(
     // _v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
     let state = &plugin.state().lock().await;
-    let brpc_host = state.brpc_host.clone();
-    let brpc_port = state.brpc_port.clone();
-    let brpc_user = state.brpc_user.clone();
-    let brpc_pass = state.brpc_pass.clone();
-    // let brpc_host = "127.0.0.1";
-    // let brpc_port: u16 = 18443;
+
     let wallets = state.wallets.clone();
-    scanblocks(brpc_host, brpc_port, brpc_user, brpc_pass)?;
     let mut result = BTreeMap::<String, ListResponseItem>::new();
     for (wallet_name, wallet) in wallets {
         result.insert(

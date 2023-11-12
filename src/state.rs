@@ -11,17 +11,17 @@ pub type State = Arc<Mutex<Smaug>>;
 pub struct Smaug {
     /// A collection of descriptors the plugin is watching.
     pub wallets: BTreeMap<String, DescriptorWallet>,
-    // The network relevant to our wallets
+    /// The network relevant to our wallets
     pub network: String,
-    // Bitcoind RPC host
+    /// Bitcoind RPC host
     pub brpc_host: String,
-    // Bitcoind RPC port
+    /// Bitcoind RPC port
     pub brpc_port: u16,
-    // Bitcoind RPC user
+    /// Bitcoind RPC user
     pub brpc_user: String,
-    // Bitcoind RPC password
+    /// Bitcoind RPC password
     pub brpc_pass: String,
-    // The db path relevant to our wallets
+    /// The db path relevant to our wallets
     pub db_dir: PathBuf,
 }
 
@@ -42,6 +42,7 @@ impl Smaug {
         &mut self,
         wallet: &DescriptorWallet,
     ) -> Result<(), anyhow::Error> {
+        log::info!("add_descriptor_wallet called");
         self.wallets.insert(wallet.get_name()?, wallet.clone());
         Ok(())
     }
