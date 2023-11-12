@@ -815,9 +815,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc"
-version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8128f36b47411cd3f044be8c1f5cc0c9e24d1d1bfdc45f0a57897b32513053f2"
+version = "0.14.0"
+source = "git+https://github.com/chrisguida/rust-jsonrpc?branch=feat/simple-http-timeout#4b3156e02bcad67e9e11ca972dadc323700188b9"
 dependencies = [
  "base64 0.13.1",
  "serde",

@@ -32,7 +32,12 @@ use tokio;
 use bdk::TransactionDetails;
 use smaug::state::{Smaug, State};
 
-fn scanblocks<'a>(brpc_user: String, brpc_pass: String) -> Result<(), Error> {
+fn scanblocks<'a>(
+    brpc_host: String,
+    brpc_port: u16,
+    brpc_user: String,
+    brpc_pass: String,
+) -> Result<(), Error> {
     // let external_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/0/*)";
     // mutinynet_descriptor = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/*)"
     let _mutinynet_descriptor_ext = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/0/*)";
@@ -43,9 +48,6 @@ fn scanblocks<'a>(brpc_user: String, brpc_pass: String) -> Result<(), Error> {
     extern crate bitcoincore_rpc;
 
     use bitcoincore_rpc::{Auth, Client, RpcApi};
-
-    let brpc_host = "127.0.0.1";
-    let brpc_port = 18443;
 
     let rpc = Client::new_with_timeout(
         &format!("http://{}:{}", brpc_host, brpc_port),
@@ -72,6 +74,16 @@ async fn main() -> Result<(), anyhow::Error> {
             "smaug_network",
             options::Value::OptString,
             "Which network to use: [bitcoin, testnet, signet, regtest, mutinynet]",
+        ))
+        .option(options::ConfigOption::new(
+            "smaug_brpc_host",
+            options::Value::String("127.0.0.1".to_owned()),
+            "Bitcoind RPC host (default 127.0.0.1)",
+        ))
+        .option(options::ConfigOption::new(
+            "smaug_brpc_port",
+            options::Value::Integer(8332),
+            "Bitcoind RPC port (default 8332)",
         ))
         .option(options::ConfigOption::new(
             "smaug_brpc_user",
@@ -112,6 +124,28 @@ async fn main() -> Result<(), anyhow::Error> {
             None => configured_plugin.configuration().network,
         },
         None => configured_plugin.configuration().network,
+    };
+    let brpc_host = match configured_plugin.option("smaug_brpc_host") {
+        Some(smaug_brpc_host) => match smaug_brpc_host.as_str() {
+            Some(sbh) => sbh.to_owned(),
+            None => return Err(anyhow!("must specify smaug_brpc_host")),
+        },
+        None => {
+            return Err(anyhow!(
+                "must specify smaug_brpc_host (your bitcoind instance rpc host)"
+            ))
+        }
+    };
+    let brpc_port: u16 = match configured_plugin.option("smaug_brpc_port") {
+        Some(smaug_brpc_port) => match smaug_brpc_port.as_i64() {
+            Some(sbp) => u16::try_from(sbp)?,
+            None => {
+                return Err(anyhow!(
+                    "must specify smaug_brpc_port (your bitcoind instance rpcport)"
+                ))
+            }
+        },
+        None => return Err(anyhow!("must specify smaug_brpc_port")),
     };
     let brpc_user = match configured_plugin.option("smaug_brpc_user") {
         Some(smaug_brpc_user) => match smaug_brpc_user.as_str() {
@@ -171,6 +205,8 @@ async fn main() -> Result<(), anyhow::Error> {
     let watch_descriptor = Smaug {
         wallets,
         network: network.clone(),
+        brpc_host: brpc_host.clone(),
+        brpc_port: brpc_port.clone(),
         brpc_user: brpc_user.clone(),
         brpc_pass: brpc_pass.clone(),
         db_dir: ln_dir.join(SMAUG_DATADIR),
@@ -345,10 +381,14 @@ async fn list(
     // _v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
     let state = &plugin.state().lock().await;
+    let brpc_host = state.brpc_host.clone();
+    let brpc_port = state.brpc_port.clone();
     let brpc_user = state.brpc_user.clone();
     let brpc_pass = state.brpc_pass.clone();
+    // let brpc_host = "127.0.0.1";
+    // let brpc_port: u16 = 18443;
     let wallets = state.wallets.clone();
-    scanblocks(brpc_user, brpc_pass)?;
+    scanblocks(brpc_host, brpc_port, brpc_user, brpc_pass)?;
     let mut result = BTreeMap::<String, ListResponseItem>::new();
     for (wallet_name, wallet) in wallets {
         result.insert(
