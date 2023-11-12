@@ -10,11 +10,15 @@ use bdk::{
 };
 use bdk_esplora::{esplora_client, EsploraAsyncExt};
 use bdk_file_store::Store;
+use bitcoincore_rpc::{
+    bitcoin::BlockHash,
+    bitcoincore_rpc_json::{ScanBlocksRequest, ScanBlocksResult},
+};
 use clap::{command, Parser};
 use cln_plugin::{Error, Plugin};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{collections::BTreeMap, fmt, io::Write, path::PathBuf};
+use std::{collections::BTreeMap, fmt, io::Write, path::PathBuf, time::Duration};
 
 use crate::state::State;
 
@@ -227,7 +231,9 @@ impl DescriptorWallet {
     }
 
     pub fn get_name(&self) -> Result<String, Error> {
+        log::info!("get_name called");
         let network = get_network(self.network.clone());
+        log::info!("get_network succeeded");
         Ok(wallet_name_from_descriptor(
             &self.descriptor,
             self.change_descriptor.as_ref(),
@@ -320,6 +326,44 @@ impl DescriptorWallet {
         let balance = wallet.get_balance();
         log::trace!("Wallet balance after syncing: {} sats", balance.total());
         return Ok(wallet);
+    }
+
+    pub fn scanblocks<'a>(
+        &self,
+        brpc_host: String,
+        brpc_port: u16,
+        brpc_user: String,
+        brpc_pass: String,
+    ) -> Result<(), Error> {
+        // let external_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/0/*)";
+        // mutinynet_descriptor = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/*)"
+        let _mutinynet_descriptor_ext = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/0/*)";
+        let _mutinynet_descriptor_int = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/1/*)";
+        let _mutinynet_descriptor_ext_2 = "wpkh(tprv8ZgxMBicQKsPeRye8MhHA8hLxMuomycmGYXyRs7zViNck2VJsCJMTPt81Que8qp3PyPgQRnN7Gb1JyBVBKgj8AKEoEmmYxYDwzZJ63q1yjA/84'/0'/0'/0/*)";
+        let _mutinynet_descriptor_int_2 = "wpkh(tprv8ZgxMBicQKsPeRye8MhHA8hLxMuomycmGYXyRs7zViNck2VJsCJMTPt81Que8qp3PyPgQRnN7Gb1JyBVBKgj8AKEoEmmYxYDwzZJ63q1yjA/84'/0'/0'/1/*)";
+        let nifty_mainnet_descriptor = "wsh(sortedmulti(2,[40c37b12/58'/0'/0'/2']xpub6FNNNqYaptuqxRkpa63obgb3Agy9hrtSkReQ4mrNhCoQBRSia6EN7kdYEZsSJK5ccEzpfpPCMcardC8Q3HEPJnE9hRCFGTKRz1KcPVSmprB/0/*,[adbeab5e/58'/0'/0'/2']xpub6ETPKtSyEY14DciERKCyd4g5YT7Cdn6zFAngcNRCH6K4Rn3ccp1GYXCkm3uawmHE5bhHgdgctGosNaqnZNvVchB3BNgbTY895WTShzXe4Fj/0/*,[d2903891/58'/0'/0'/2']xpub6F7yv4S2GMr4rffSPTpQJauPer2JhGhuj9kR9Js4AbwDdctvES5gVtAV8d3iQReKhF9JzVihJTKKRfGoNy4TXvJsPj2wmvDrTTXZ7aWdG2Y/0/*))#vwave986";
+
+        extern crate bitcoincore_rpc;
+
+        use bitcoincore_rpc::{Auth, Client, RpcApi};
+
+        let rpc = Client::new_with_timeout(
+            &format!("http://{}:{}", brpc_host, brpc_port),
+            Auth::UserPass(brpc_user, brpc_pass), // Auth::CookieFile(PathBuf::from("/home/cguida/.bitcoin/regtest/.cookie"))
+            Duration::from_secs(3600),
+        )
+        .unwrap();
+        // let descriptor = ScanBlocksRequest::Extended {
+        //     desc: nifty_mainnet_descriptor.to_string(),
+        //     range: None,
+        // };
+        // let descriptor = ScanBlocksRequest::Single(nifty_mainnet_descriptor.to_string());
+        let descriptor = ScanBlocksRequest::Single(self.descriptor.clone());
+        let descriptors = &[descriptor];
+        let res = rpc.scan_blocks_blocking(descriptors);
+        log::info!("scanblocks result: {:?}", res.unwrap());
+
+        return Ok(());
     }
 
     // assume we own all inputs, ie sent from our wallet. all inputs and outputs should generate coin movement bookkeeper events
