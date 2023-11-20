@@ -287,7 +287,10 @@ async fn add(
         let brpc_port = state.brpc_port.clone();
         let brpc_user = state.brpc_user.clone();
         let brpc_pass = state.brpc_pass.clone();
-        match dw.scanblocks(brpc_host, brpc_port, brpc_user, brpc_pass) {
+        match dw
+            .scanblocks(brpc_host, brpc_port, brpc_user, brpc_pass)
+            .await
+        {
             Ok(_) => {
                 log::info!("scan succeeded");
             }
@@ -410,8 +413,10 @@ async fn delete(
 
 async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Result<(), Error> {
     log::trace!("Got a block_added notification: {}", v);
-    log::trace!("Smaug state!!! {:?}", plugin.state().lock().await.wallets.clone());
-
+    log::trace!(
+        "Smaug state!!! {:?}",
+        plugin.state().lock().await.wallets.clone()
+    );
 
     log::trace!("waiting for db_dir lock in block_handler");
     let db_dir = {
@@ -426,19 +431,17 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
     log::trace!("db_dir in block_handler: {:?}", &db_dir);
     log::trace!("acquired wallet lock in block_handler");
     for (_dw_desc, dw) in descriptor_wallets.iter_mut() {
-        log::trace!("fetching wallet in block_handler: {:?}", dw);
-
-        let wallet = dw
-        .fetch_wallet(db_dir.clone())
-        .await?;
-        log::trace!("...fetched wallet in block_handler");
-        let bdk_transactions_iter = wallet.transactions();
+        // let wallet = dw
+        //     .fetch_wallet(plugin.state().lock().await.db_dir.clone())
+        //     .await?;
+        // let bdk_transactions_iter = wallet.transactions();
         let mut transactions = Vec::<TransactionDetails>::new();
-        for bdk_transaction in bdk_transactions_iter {
-            log::trace!("BDK transaction = {:?}", bdk_transaction.node.tx);
-            transactions.push(wallet.get_tx(bdk_transaction.node.txid, true).unwrap());
-        }
+        // for bdk_transaction in bdk_transactions_iter {
+        //     log::trace!("BDK transaction = {:?}", bdk_transaction.node.tx);
+        //     transactions.push(wallet.get_tx(bdk_transaction.node.txid, true).unwrap());
+        // }
 
+        // let transactions = vec![];
         if transactions.len() > 0 {
             log::trace!(
                 "found some new transactions in new block! : {:?}",
