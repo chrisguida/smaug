@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use bdk::{
     bitcoin::{
         secp256k1::{All, Secp256k1},
-        Network, Txid,
+        Network, Transaction, Txid,
     },
     chain::{keychain::LocalChangeSet, ConfirmationTime, ConfirmationTimeAnchor},
     wallet::wallet_name_from_descriptor,
@@ -15,9 +15,11 @@ use bitcoincore_rpc::{
     bitcoincore_rpc_json::{
         ScanBlocksOptions, ScanBlocksRequest, ScanBlocksRequestDescriptor, ScanBlocksResult,
     },
+    Auth, Client, RpcApi,
 };
 use clap::{command, Parser};
 use cln_plugin::{Error, Plugin};
+use cln_rpc::ClnRpc;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{collections::BTreeMap, fmt, io::Write, path::PathBuf, time::Duration};
@@ -39,6 +41,14 @@ pub enum WatchError {
     InvalidBirthday(String),
     InvalidGap(String),
     InvalidFormat(String),
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+struct RpcConnection {
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    pub pass: String,
 }
 
 impl std::error::Error for WatchError {}
@@ -248,93 +258,100 @@ impl DescriptorWallet {
         )?)
     }
 
-    pub async fn fetch_wallet<'a>(
-        &self,
-        db_dir: PathBuf,
-    ) -> Result<Wallet<Store<'a, LocalChangeSet<KeychainKind, ConfirmationTimeAnchor>>>, Error>
-    {
-        log::trace!("creating path");
-        let db_filename = self.get_name()?;
-        let db_path = db_dir
-            // .join(DATADIR)
-            .join(format!("{}.db", db_filename,));
-        log::trace!("searching for path: {:?}", db_path);
-        let db = Store::<bdk::wallet::ChangeSet>::new_from_path(SMAUG_DATADIR.as_bytes(), db_path)?;
-        log::trace!("db created!");
-        // let external_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/0/*)";
-        // mutinynet_descriptor = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/*)"
-        let _mutinynet_descriptor_ext = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/0/*)";
-        let _mutinynet_descriptor_int = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/1/*)";
-        let _mutinynet_descriptor_ext_2 = "wpkh(tprv8ZgxMBicQKsPeRye8MhHA8hLxMuomycmGYXyRs7zViNck2VJsCJMTPt81Que8qp3PyPgQRnN7Gb1JyBVBKgj8AKEoEmmYxYDwzZJ63q1yjA/84'/0'/0'/0/*)";
-        let _mutinynet_descriptor_int_2 = "wpkh(tprv8ZgxMBicQKsPeRye8MhHA8hLxMuomycmGYXyRs7zViNck2VJsCJMTPt81Que8qp3PyPgQRnN7Gb1JyBVBKgj8AKEoEmmYxYDwzZJ63q1yjA/84'/0'/0'/1/*)";
-        // let external_descriptor = "wpkh(tpubEBr4i6yk5nf5DAaJpsi9N2pPYBeJ7fZ5Z9rmN4977iYLCGco1VyjB9tvvuvYtfZzjD5A8igzgw3HeWeeKFmanHYqksqZXYXGsw5zjnj7KM9/*)";
-        // let internal_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/1/*)";
+    // pub async fn fetch_wallet<'a>(
+    //     &self,
+    //     db_dir: PathBuf,
+    // ) -> Result<Wallet<Store<'a, LocalChangeSet<KeychainKind, ConfirmationTimeAnchor>>>, Error>
+    // {
+    // log::trace!("creating path");
+    // let db_filename = self.get_name()?;
+    // let db_path = db_dir
+    //     // .join(DATADIR)
+    //     .join(format!("{}.db", db_filename,));
+    // log::trace!("searching for path: {:?}", db_path);
+    // let db = Store::<bdk::wallet::ChangeSet>::new_from_path(SMAUG_DATADIR.as_bytes(), db_path)?;
+    // log::trace!("db created!");
+    // // let external_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/0/*)";
+    // // mutinynet_descriptor = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/*)"
+    // let _mutinynet_descriptor_ext = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/0/*)";
+    // let _mutinynet_descriptor_int = "wpkh(tprv8ZgxMBicQKsPdSAgthqLZ5ZWQkm5As4V3qNA5G8KKxGuqdaVVtBhytrUqRGPm4RxTktSdvch8JyUdfWR8g3ddrC49WfZnj4iGZN8y5L8NPZ/84'/0'/0'/1/*)";
+    // let _mutinynet_descriptor_ext_2 = "wpkh(tprv8ZgxMBicQKsPeRye8MhHA8hLxMuomycmGYXyRs7zViNck2VJsCJMTPt81Que8qp3PyPgQRnN7Gb1JyBVBKgj8AKEoEmmYxYDwzZJ63q1yjA/84'/0'/0'/0/*)";
+    // let _mutinynet_descriptor_int_2 = "wpkh(tprv8ZgxMBicQKsPeRye8MhHA8hLxMuomycmGYXyRs7zViNck2VJsCJMTPt81Que8qp3PyPgQRnN7Gb1JyBVBKgj8AKEoEmmYxYDwzZJ63q1yjA/84'/0'/0'/1/*)";
+    // // let external_descriptor = "wpkh(tpubEBr4i6yk5nf5DAaJpsi9N2pPYBeJ7fZ5Z9rmN4977iYLCGco1VyjB9tvvuvYtfZzjD5A8igzgw3HeWeeKFmanHYqksqZXYXGsw5zjnj7KM9/*)";
+    // // let internal_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/0'/0'/1/*)";
 
-        // let external_descriptor = mutinynet_descriptor_ext;
-        // let internal_descriptor = mutinynet_descriptor_int;
-        let external_descriptor = self.descriptor.clone();
-        let internal_descriptor = self.change_descriptor.clone();
-        let mut wallet = Wallet::new(
-            &external_descriptor,
-            internal_descriptor.as_ref(),
-            db,
-            self.get_network()?,
-        )?;
-        log::trace!("wallet created!");
+    // // let external_descriptor = mutinynet_descriptor_ext;
+    // // let internal_descriptor = mutinynet_descriptor_int;
+    // let external_descriptor = self.descriptor.clone();
+    // let internal_descriptor = self.change_descriptor.clone();
+    // let mut wallet = Wallet::new(
+    //     &external_descriptor,
+    //     internal_descriptor.as_ref(),
+    //     db,
+    //     self.get_network()?,
+    // )?;
+    // log::trace!("wallet created!");
 
-        let balance = wallet.get_balance();
-        log::trace!("Wallet balance before syncing: {} sats", balance.total());
+    // let balance = wallet.get_balance();
+    // log::trace!("Wallet balance before syncing: {} sats", balance.total());
 
-        log::trace!("Syncing...");
-        log::debug!("using network: {}", json!(self.network).as_str().unwrap());
-        log::debug!(
-            "using esplora url: {}",
-            get_network_url(json!(self.network).as_str().unwrap()).as_str()
-        );
-        let client =
-            // esplora_client::Builder::new("https://blockstream.info/testnet/api").build_async()?;
-            esplora_client::Builder::new(
-                get_network_url(
-                        json!(self.network).as_str().unwrap()
-                ).as_str()
-            ).build_async()?;
+    // log::trace!("Syncing...");
+    // log::debug!("using network: {}", json!(self.network).as_str().unwrap());
+    // log::debug!(
+    //     "using esplora url: {}",
+    //     get_network_url(json!(self.network).as_str().unwrap()).as_str()
+    // );
+    // // let client =
+    // //     // esplora_client::Builder::new("https://blockstream.info/testnet/api").build_async()?;
+    // //     esplora_client::Builder::new(
+    // //         get_network_url(
+    // //                 json!(self.network).as_str().unwrap()
+    // //         ).as_str()
+    // //     ).build_async()?;
+    // let client =
+    //     // esplora_client::Builder::new("https://blockstream.info/testnet/api").build_async()?;
+    //     esplora_client::Builder::new(
+    //         get_network_url(
+    //                 json!(self.network).as_str().unwrap()
+    //         ).as_str()
+    //     ).build_async()?;
 
-        let local_chain = wallet.checkpoints();
-        let keychain_spks = wallet
-            .spks_of_all_keychains()
-            .into_iter()
-            .map(|(k, k_spks)| {
-                let mut once = Some(());
-                let mut stdout = std::io::stdout();
-                let k_spks = k_spks
-                    .inspect(move |(spk_i, _)| match once.take() {
-                        Some(_) => log::debug!("\nScanning keychain [{:?}]", k),
-                        None => log::trace!(" {:<3}", spk_i),
-                    })
-                    .inspect(move |_| stdout.flush().expect("must flush"));
-                (k, k_spks)
-            })
-            .collect();
-        log::trace!("Finished scanning");
-        let update = client
-            .scan(
-                local_chain,
-                keychain_spks,
-                [],
-                [],
-                STOP_GAP,
-                PARALLEL_REQUESTS,
-            )
-            .await?;
-        wallet.apply_update(update)?;
-        wallet.commit()?;
+    // let local_chain = wallet.checkpoints();
+    // let keychain_spks = wallet
+    //     .spks_of_all_keychains()
+    //     .into_iter()
+    //     .map(|(k, k_spks)| {
+    //         let mut once = Some(());
+    //         let mut stdout = std::io::stdout();
+    //         let k_spks = k_spks
+    //             .inspect(move |(spk_i, _)| match once.take() {
+    //                 Some(_) => log::debug!("\nScanning keychain [{:?}]", k),
+    //                 None => log::trace!(" {:<3}", spk_i),
+    //             })
+    //             .inspect(move |_| stdout.flush().expect("must flush"));
+    //         (k, k_spks)
+    //     })
+    //     .collect();
+    // log::trace!("Finished scanning");
+    // let update = client
+    //     .scan(
+    //         local_chain,
+    //         keychain_spks,
+    //         [],
+    //         [],
+    //         STOP_GAP,
+    //         PARALLEL_REQUESTS,
+    //     )
+    //     .await?;
+    // wallet.apply_update(update)?;
+    // wallet.commit()?;
 
-        let balance = wallet.get_balance();
-        log::trace!("Wallet balance after syncing: {} sats", balance.total());
-        return Ok(wallet);
-    }
+    // let balance = wallet.get_balance();
+    // log::trace!("Wallet balance after syncing: {} sats", balance.total());
+    //     return Ok(wallet);
+    // }
 
-    pub fn scanblocks<'a>(
+    pub async fn scanblocks<'a>(
         &self,
         brpc_host: String,
         brpc_port: u16,
@@ -348,11 +365,9 @@ impl DescriptorWallet {
         let _mutinynet_descriptor_ext_2 = "wpkh(tprv8ZgxMBicQKsPeRye8MhHA8hLxMuomycmGYXyRs7zViNck2VJsCJMTPt81Que8qp3PyPgQRnN7Gb1JyBVBKgj8AKEoEmmYxYDwzZJ63q1yjA/84'/0'/0'/0/*)";
         let _mutinynet_descriptor_int_2 = "wpkh(tprv8ZgxMBicQKsPeRye8MhHA8hLxMuomycmGYXyRs7zViNck2VJsCJMTPt81Que8qp3PyPgQRnN7Gb1JyBVBKgj8AKEoEmmYxYDwzZJ63q1yjA/84'/0'/0'/1/*)";
 
-        use bitcoincore_rpc::{Auth, Client, RpcApi};
-
         let rpc = Client::new_with_timeout(
             &format!("http://{}:{}", brpc_host, brpc_port),
-            Auth::UserPass(brpc_user, brpc_pass), // Auth::CookieFile(PathBuf::from("/home/cguida/.bitcoin/regtest/.cookie"))
+            Auth::UserPass(brpc_user.clone(), brpc_pass.clone()), // Auth::CookieFile(PathBuf::from("/home/cguida/.bitcoin/regtest/.cookie"))
             Duration::from_secs(3600),
         )
         .unwrap();
@@ -370,10 +385,40 @@ impl DescriptorWallet {
                 filter_false_positives: Some(true),
             }),
         };
-        let res = rpc.scan_blocks_blocking(request);
-        log::info!("scanblocks result: {:?}", res.unwrap());
+        let res = rpc.scan_blocks_blocking(request)?;
+        log::info!("scanblocks result: {:?}", res);
+
+        let conn = RpcConnection {
+            host: brpc_host,
+            port: brpc_port,
+            user: brpc_user,
+            pass: brpc_pass,
+        };
+
+        for bh in res.relevant_blocks {
+            self.get_relevant_txs(bh, &conn).await?;
+        }
 
         return Ok(());
+    }
+
+    async fn get_relevant_txs(
+        &self,
+        bh: BlockHash,
+        conn: &RpcConnection,
+    ) -> Result<Vec<Transaction>, Error> {
+        let relevant_txs: Vec<Transaction> = vec![];
+        let rpc = Client::new(
+            &format!("http://{}:{}", conn.host, conn.port),
+            Auth::UserPass(conn.user.clone(), conn.pass.clone()), // Auth::CookieFile(PathBuf::from("/home/cguida/.bitcoin/regtest/.cookie"))
+                                                                  // Duration::from_secs(3600),
+        )?;
+        let block = rpc.get_block(&bh)?;
+        for tx in block.txdata {
+            // let tx_bdk = tx.into();
+            relevant_txs.push(tx);
+        }
+        Ok(relevant_txs)
     }
 
     // assume we own all inputs, ie sent from our wallet. all inputs and outputs should generate coin movement bookkeeper events
