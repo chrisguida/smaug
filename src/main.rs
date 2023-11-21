@@ -325,13 +325,28 @@ async fn delete(
 
 async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Result<(), Error> {
     log::trace!("Got a block_added notification: {}", v);
-    log::trace!("Smaug state!!! {:?}", plugin.state().lock().await.wallets);
+    log::trace!("Smaug state!!! {:?}", plugin.state().lock().await.wallets.clone());
 
-    let descriptor_wallets = &mut plugin.state().lock().await.wallets;
+
+    log::trace!("waiting for db_dir lock in block_handler");
+    let db_dir = {
+        let state = plugin.state().lock().await;
+        state.db_dir.clone()
+    };
+
+    log::trace!("waiting for wallet lock in block_handler");
+    let state = &mut plugin.state().lock().await;
+    let descriptor_wallets = &mut state.wallets;
+
+    log::trace!("db_dir in block_handler: {:?}", &db_dir);
+    log::trace!("acquired wallet lock in block_handler");
     for (_dw_desc, dw) in descriptor_wallets.iter_mut() {
+        log::trace!("fetching wallet in block_handler: {:?}", dw);
+
         let wallet = dw
-            .fetch_wallet(plugin.state().lock().await.db_dir.clone())
-            .await?;
+        .fetch_wallet(db_dir.clone())
+        .await?;
+        log::trace!("...fetched wallet in block_handler");
         let bdk_transactions_iter = wallet.transactions();
         let mut transactions = Vec::<TransactionDetails>::new();
         for bdk_transaction in bdk_transactions_iter {
@@ -356,5 +371,6 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
             log::debug!("found no transactions");
         }
     }
+    log::trace!("returning from block_added_handler");
     Ok(())
 }
