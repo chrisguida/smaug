@@ -343,7 +343,7 @@ impl DescriptorWallet {
                                 let amount = po.value;
                                 let outpoint = format!("{}", input.previous_output.to_string());
                                 log::trace!("outpoint = {}", format!("{}", outpoint));
-                                let onchain_spend = json!({
+                                let onchain_spend = json!({UTXO_SPENT_TAG: {
                                     "account": acct,
                                     "outpoint": outpoint,
                                     "spending_txid": tx.txid.to_string(),
@@ -351,7 +351,7 @@ impl DescriptorWallet {
                                     "coin_type": "bcrt",
                                     "timestamp": format!("{}", time),
                                     "blockheight": format!("{}", height),
-                                });
+                                }});
                                 log::trace!("INSIDE SEND SPEND NOTIFICATION ON SMAUG SIDE");
                                 let cloned_plugin = plugin.clone();
                                 tokio::spawn(async move {
@@ -394,7 +394,7 @@ impl DescriptorWallet {
                                 "outpoint = {}",
                                 format!("{}:{}", tx.txid.to_string(), vout.to_string())
                             );
-                            let onchain_deposit = json!({
+                            let onchain_deposit = json!({UTXO_DEPOSIT_TAG:{
                                     "account": acct,
                                     "transfer_from": transfer_from,
                                     "outpoint": outpoint,
@@ -403,7 +403,7 @@ impl DescriptorWallet {
                                     "coin_type": "bcrt",
                                     "timestamp": format!("{}", time),
                                     "blockheight": format!("{}", height),
-                            });
+                            }});
                             log::trace!("INSIDE SEND DEPOSIT NOTIFICATION ON SMAUG SIDE");
                             let cloned_plugin = plugin.clone();
                             tokio::spawn(async move {
@@ -466,7 +466,7 @@ impl DescriptorWallet {
                                     "outpoint = {}",
                                     format!("{}:{}", tx.txid.to_string(), vout.to_string())
                                 );
-                                let onchain_deposit = json!({
+                                let onchain_deposit = json!({UTXO_DEPOSIT_TAG: {
                                         "account": acct,
                                         "transfer_from": transfer_from,
                                         "outpoint": outpoint,
@@ -475,7 +475,7 @@ impl DescriptorWallet {
                                         "coin_type": "bcrt",
                                         "timestamp": format!("{}", time),
                                         "blockheight": format!("{}", height),
-                                });
+                                }});
                                 log::trace!("INSIDE SEND DEPOSIT NOTIFICATION ON SMAUG SIDE");
                                 let cloned_plugin = plugin.clone();
                                 tokio::spawn(async move {
@@ -526,7 +526,7 @@ impl DescriptorWallet {
                                     let amount = po.value;
                                     let outpoint = format!("{}", input.previous_output.to_string());
                                     log::trace!("outpoint = {}", format!("{}", outpoint));
-                                    let onchain_spend = json!({
+                                    let onchain_spend = json!({UTXO_SPENT_TAG: {
                                         "account": acct,
                                         "outpoint": outpoint,
                                         "spending_txid": tx.txid.to_string(),
@@ -534,7 +534,7 @@ impl DescriptorWallet {
                                         "coin_type": "bcrt",
                                         "timestamp": format!("{}", time),
                                         "blockheight": format!("{}", height),
-                                    });
+                                    }});
                                     log::trace!("INSIDE SEND SPEND NOTIFICATION ON SMAUG SIDE");
                                     let cloned_plugin = plugin.clone();
                                     tokio::spawn(async move {
@@ -584,7 +584,7 @@ impl DescriptorWallet {
                                 "outpoint = {}",
                                 format!("{}:{}", tx.txid.to_string(), vout.to_string())
                             );
-                            let onchain_deposit = json!({
+                            let onchain_deposit = json!({UTXO_DEPOSIT_TAG: {
                                     "account": acct,
                                     "transfer_from": transfer_from,
                                     "outpoint": outpoint,
@@ -593,7 +593,7 @@ impl DescriptorWallet {
                                     "coin_type": "bcrt",
                                     "timestamp": format!("{}", time),
                                     "blockheight": format!("{}", height),
-                            });
+                            }});
                             log::trace!("INSIDE SEND DEPOSIT NOTIFICATION ON SMAUG SIDE");
                             let cloned_plugin = plugin.clone();
                             tokio::spawn(async move {
