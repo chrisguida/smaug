@@ -44,11 +44,19 @@
           echo "Entering devshell..."
 
           echo "Run \`cargo build\` to build \`smaug\`."
+          echo ""
+          echo "If this is your first time setting up smaug, run:"
+          echo "mkdir -p ~/.bitcoin"
+          echo ""
 
-          echo "To set up two lightning nodes and a bitcoin node in regtest mode, run:"
+          echo "Then to set up two lightning nodes and a bitcoin node in regtest mode,"
+          echo "run the following two commands:"
           echo "source ${pkgs.clightning.src}/contrib/startup_regtest.sh"
+          echo "start_ln"
+          echo ""
 
-          echo "Then run \`l1-cli plugin start $(pwd)/target/debug/smaug\` to start smaug on Lightning Node 1!"
+          echo "Finally, to start smaug on Lightning Node 1, run"
+          echo "l1-cli plugin start $(pwd)/target/debug/smaug"
         '';
       };
     }
