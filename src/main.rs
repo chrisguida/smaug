@@ -4,6 +4,8 @@
 #[macro_use]
 extern crate serde_json;
 
+use bdk::chain::tx_graph::CanonicalTx;
+use bdk::chain::ConfirmationTimeAnchor;
 use clap::error::ErrorKind;
 use clap::{CommandFactory, Parser, Subcommand};
 use cln_rpc::model::DatastoreMode;
@@ -26,7 +28,7 @@ use smaug::wallet::{AddArgs, DescriptorWallet, SMAUG_DATADIR, UTXO_DEPOSIT_TAG, 
 use cln_plugin::{anyhow, messages, options, Builder, Error, Plugin};
 use tokio;
 
-use bdk::TransactionDetails;
+use bdk::bitcoin::Transaction;
 use smaug::state::{Smaug, State};
 
 #[tokio::main]
@@ -277,50 +279,52 @@ async fn add(
     // v: serde_json::Value,
     args: AddArgs,
 ) -> Result<serde_json::Value, Error> {
-    let dw = DescriptorWallet::from_args(args, plugin.state().lock().await.network.clone())
+    let mut dw = DescriptorWallet::from_args(args, plugin.state().lock().await.network.clone())
         .map_err(|e| anyhow!("error parsing args: {}", e))?;
     // dw.network = );
     log::trace!("params = {:?}", dw);
-    {
-        let state = &plugin.state().lock().await;
-        let brpc_host = state.brpc_host.clone();
-        let brpc_port = state.brpc_port.clone();
-        let brpc_user = state.brpc_user.clone();
-        let brpc_pass = state.brpc_pass.clone();
-        match dw
-            .scanblocks(brpc_host, brpc_port, brpc_user, brpc_pass)
-            .await
-        {
-            Ok(_) => {
-                log::info!("scan succeeded");
-            }
-            Err(e) => {
-                log::info!("scan failed: {}", e);
-            }
-        };
-    }
-    // let wallet = dw
-    //     .fetch_wallet(plugin.state().lock().await.db_dir.clone())
-    //     .await?;
-    // let bdk_transactions_iter = wallet.transactions();
-    // let mut transactions = Vec::<TransactionDetails>::new();
-    // for bdk_transaction in bdk_transactions_iter {
-    //     log::trace!("BDK transaction = {:?}", bdk_transaction.node.tx);
-    //     transactions.push(wallet.get_tx(bdk_transaction.node.txid, true).unwrap());
-    // }
-
-    // if transactions.len() > 0 {
-    //     log::trace!("found some transactions: {:?}", transactions);
-    //     let new_txs = dw.update_transactions(transactions);
-    //     if new_txs.len() > 0 {
-    //         for tx in new_txs {
-    //             log::trace!("new tx found!: {:?}", tx);
-    //             dw.send_notifications_for_tx(&plugin, &wallet, tx).await?;
-    //         }
-    //     } else {
-    //         log::debug!("no new txs this time");
+    // {
+    let state = &plugin.state().lock().await;
+    let brpc_host = state.brpc_host.clone();
+    let brpc_port = state.brpc_port.clone();
+    let brpc_user = state.brpc_user.clone();
+    let brpc_pass = state.brpc_pass.clone();
+    let db_dir = state.db_dir.clone();
+    // match dw
+    //     .scanblocks(brpc_host, brpc_port, brpc_user, brpc_pass)
+    //     .await
+    // {
+    //     Ok(_) => {
+    //         log::info!("scan succeeded");
     //     }
+    //     Err(e) => {
+    //         log::info!("scan failed: {}", e);
+    //     }
+    // };
     // }
+    let dw_clone = dw.clone();
+    let wallet = dw_clone
+        .fetch_wallet(db_dir, brpc_host, brpc_port, brpc_user, brpc_pass)
+        .await?;
+    let bdk_transactions_iter = wallet.transactions();
+    let mut transactions = Vec::<CanonicalTx<'_, Transaction, ConfirmationTimeAnchor>>::new();
+    for bdk_transaction in bdk_transactions_iter {
+        log::trace!("BDK transaction = {:?}", bdk_transaction.tx_node.tx);
+        transactions.push(bdk_transaction);
+    }
+
+    if transactions.len() > 0 {
+        log::trace!("found some transactions: {:?}", transactions);
+        let new_txs = dw.update_transactions(transactions);
+        if new_txs.len() > 0 {
+            for tx in new_txs {
+                log::trace!("new tx found!: {:?}", tx);
+                dw.send_notifications_for_tx(&plugin, &wallet, tx).await?;
+            }
+        } else {
+            log::debug!("no new txs this time");
+        }
+    }
     log::info!("waiting for wallet lock");
     plugin.state().lock().await.add_descriptor_wallet(&dw)?;
 
@@ -417,12 +421,17 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
         "Smaug state!!! {:?}",
         plugin.state().lock().await.wallets.clone()
     );
-
-    log::trace!("waiting for db_dir lock in block_handler");
-    let db_dir = {
-        let state = plugin.state().lock().await;
-        state.db_dir.clone()
-    };
+    let state = &plugin.state().lock().await;
+    let brpc_host = state.brpc_host.clone();
+    let brpc_port = state.brpc_port.clone();
+    let brpc_user = state.brpc_user.clone();
+    let brpc_pass = state.brpc_pass.clone();
+    let db_dir = state.db_dir.clone();
+    // log::trace!("waiting for db_dir lock in block_handler");
+    // let db_dir = {
+    //     let state = plugin.state().lock().await;
+    //     state.db_dir.clone()
+    // };
 
     log::trace!("waiting for wallet lock in block_handler");
     let state = &mut plugin.state().lock().await;
@@ -431,17 +440,28 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
     log::trace!("db_dir in block_handler: {:?}", &db_dir);
     log::trace!("acquired wallet lock in block_handler");
     for (_dw_desc, dw) in descriptor_wallets.iter_mut() {
-        // let wallet = dw
-        //     .fetch_wallet(plugin.state().lock().await.db_dir.clone())
-        //     .await?;
-        // let bdk_transactions_iter = wallet.transactions();
-        let mut transactions = Vec::<TransactionDetails>::new();
-        // for bdk_transaction in bdk_transactions_iter {
-        //     log::trace!("BDK transaction = {:?}", bdk_transaction.node.tx);
-        //     transactions.push(wallet.get_tx(bdk_transaction.node.txid, true).unwrap());
-        // }
+        log::trace!("fetching wallet in block_handler: {:?}", dw);
 
-        // let transactions = vec![];
+        let dw_clone = dw.clone();
+        let wallet = dw_clone
+            .fetch_wallet(
+                db_dir.clone(),
+                brpc_host.clone(),
+                brpc_port.clone(),
+                brpc_user.clone(),
+                brpc_pass.clone(),
+            )
+            .await?;
+
+        // let wallet = dw.fetch_wallet(db_dir.clone()).await?;
+        log::trace!("...fetched wallet in block_handler");
+        let bdk_transactions_iter = wallet.transactions();
+        let mut transactions = Vec::<CanonicalTx<'_, Transaction, ConfirmationTimeAnchor>>::new();
+        for bdk_transaction in bdk_transactions_iter {
+            log::trace!("BDK transaction = {:?}", bdk_transaction.tx_node.tx);
+            transactions.push(bdk_transaction);
+        }
+
         if transactions.len() > 0 {
             log::trace!(
                 "found some new transactions in new block! : {:?}",

@@ -10,14 +10,17 @@ anyhow = "1.0"
 base64 = "0.21.2"
 # bdk = "0.27.1"
 # bdk = { version = "0.29", default-features=false, features = ["std", "key-value-db","async-interface", "use-esplora-async", "rpc"] }
-bdk = { git = "https://github.com/bitcoindevkit/bdk", version = "1.0.0-alpha.1", rev = "8f38e96e4542db2378e2e64cd9289638ee86ba1a" }
+# bdk = { git = "https://github.com/bitcoindevkit/bdk", version = "1.0.0-alpha.1", rev = "8f38e96e4542db2378e2e64cd9289638ee86ba1a" }
+# bdk = "1.0.0-alpha.2"
 # bdk = {  path = "../../lib/bdk/crates/bdk" }
+bdk = {  path = "../bdk/crates/bdk" }
 # bdk_esplora = { version = "0.3.0", features = ["async-https"] }
 # bdk_esplora = {  path = "../../lib/bdk/crates/esplora", features = ["async-https"] }
-bdk_esplora = { git = "https://github.com/bitcoindevkit/bdk", rev = "8f38e96e4542db2378e2e64cd9289638ee86ba1a" }
+# bdk_esplora = { git = "https://github.com/bitcoindevkit/bdk", rev = "8f38e96e4542db2378e2e64cd9289638ee86ba1a" }
 # bdk_file_store = { version = "0.2.0" }
 # bdk_file_store = { path = "../../lib/bdk/crates/file_store" }
-bdk_file_store = { git = "https://github.com/bitcoindevkit/bdk", rev = "8f38e96e4542db2378e2e64cd9289638ee86ba1a" }
+bdk_file_store = { path = "../bdk/crates/file_store" }
+# bdk_file_store = { git = "https://github.com/bitcoindevkit/bdk", rev = "8f38e96e4542db2378e2e64cd9289638ee86ba1a" }
 bitcoincore-rpc = { path = "../rust-bitcoincore-rpc/client" }
 # bitcoincore-rpc = { git = "https://github.com/chrisguida/rust-bitcoincore-rpc", branch = "feat/scanblocks" }
 clap = { version = "4.4.0", features = ["derive"] }
