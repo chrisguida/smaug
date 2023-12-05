@@ -354,10 +354,10 @@ impl DescriptorWallet {
             Duration::from_secs(3600),
         )?;
 
-        println!(
-            "Connected to Bitcoin Core RPC at {:?}",
-            rpc_client.get_blockchain_info().unwrap()
-        );
+        // println!(
+        //     "Connected to Bitcoin Core RPC at {:?}",
+        //     rpc_client.get_blockchain_info().unwrap()
+        // );
 
         let external_descriptor = ScanBlocksRequestDescriptor::Extended {
             desc: external_descriptor.to_string(),
@@ -399,8 +399,8 @@ impl DescriptorWallet {
         //         )?,
         //     ],
         // };
-        println!("scanblocks result: {:?}", res);
-        println!("wallet = {:?}", wallet);
+        // println!("scanblocks result: {:?}", res);
+        // println!("wallet = {:?}", wallet);
 
         wallet.set_lookahead_for_all(20)?;
 
@@ -416,7 +416,7 @@ impl DescriptorWallet {
             // self.get_relevant_txs(bh, &conn);
             let block = rpc_client.get_block(&bh)?;
             let height: u32 = block.bip34_block_height()?.try_into().unwrap();
-            println!("adding block height {} to wallet", height);
+            // println!("adding block height {} to wallet", height);
             wallet.apply_block_relevant(block.clone(), prev_block_id, height)?;
             wallet.commit()?;
             prev_block_id = Some(BlockId { height, hash: bh });
@@ -434,8 +434,8 @@ impl DescriptorWallet {
         // wallet.batch_insert_relevant_unconfirmed(unconfirmed_txs.iter().map(|(tx, time)| (tx, *time)));
         // wallet.commit()?;
 
-        let balance = wallet.get_balance();
-        println!("Wallet balance after syncing: {} sats", balance.total());
+        // let balance = wallet.get_balance();
+        // println!("Wallet balance after syncing: {} sats", balance.total());
 
         let balance = wallet.get_balance();
         log::trace!("Wallet balance after syncing: {} sats", balance.total());
