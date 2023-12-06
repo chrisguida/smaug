@@ -161,8 +161,11 @@ async fn main() -> Result<(), anyhow::Error> {
                 Some(deserialized) => match serde_json::from_str(&deserialized) {
                     core::result::Result::Ok(dws) => dws,
                     core::result::Result::Err(e) => {
-                        log::error!("Error parsing wallet from datastore: {:?}", &r.datastore[0].string);
-                        log::error!("{}", e);
+                        // sometimes log::error! doesn't execute before plugin is killed
+                        eprintln!("Error parsing wallet from datastore: {:?}", &r.datastore[0].string);
+                        eprintln!("{}", e);
+                        eprintln!("This is probably due to an outdated wallet format.");
+                        eprintln!("Please delete the wallet with `lightning-cli deldatastore smaug` and restart Smaug.");
                         return Err(e.into());
                     }
                 },
