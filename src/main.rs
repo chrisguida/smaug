@@ -295,6 +295,7 @@ async fn add(plugin: Plugin<State>, args: AddArgs) -> Result<serde_json::Value, 
         let state = plugin.state().lock().await;
         (
             state.db_dir.clone(),
+            // FIXME: actually use the RpcConnection struct instead of this nonsense
             state.brpc_host.clone(),
             state.brpc_port.clone(),
             state.brpc_user.clone(),
@@ -324,6 +325,7 @@ async fn add(plugin: Plugin<State>, args: AddArgs) -> Result<serde_json::Value, 
             log::debug!("no new txs this time");
         }
     }
+    // FIXME: this is horrible, please find a better way to do this
     dw.update_last_synced(dw_clone.last_synced.unwrap());
     log::trace!("waiting for wallet lock");
     plugin.state().lock().await.add_descriptor_wallet(&dw)?;

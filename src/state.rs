@@ -42,7 +42,7 @@ impl Smaug {
         &mut self,
         wallet: &DescriptorWallet,
     ) -> Result<(), anyhow::Error> {
-        log::info!("add_descriptor_wallet called");
+        log::trace!("add_descriptor_wallet called");
         self.wallets.insert(wallet.get_name()?, wallet.clone());
         Ok(())
     }
