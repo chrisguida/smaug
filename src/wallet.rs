@@ -2,7 +2,7 @@ use anyhow::{anyhow, Chain};
 use bdk::{
     bitcoin::{
         secp256k1::{All, Secp256k1},
-        Network, Transaction, Txid,
+        BlockHash, Network, Transaction, Txid,
     },
     chain::{
         tx_graph::CanonicalTx, BlockId, ChainPosition, ConfirmationTime, ConfirmationTimeAnchor,
@@ -22,7 +22,7 @@ use clap::{command, Parser};
 use cln_plugin::{Error, Plugin};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{collections::BTreeMap, fmt, path::PathBuf, time::Duration};
+use std::{collections::BTreeMap, fmt, path::PathBuf, str::FromStr, time::Duration};
 
 use crate::state::State;
 
@@ -121,7 +121,7 @@ pub struct DescriptorWallet {
     pub change_descriptor: Option<String>,
     pub birthday: Option<u32>,
     pub gap: Option<u32>,
-    // pub last_synced: Option<BlockTime>,
+    pub last_synced: Option<u32>,
     // #[serde(skip_serializing, skip_deserializing)]
     pub transactions: BTreeMap<Txid, Transaction>,
     pub network: Option<String>,
@@ -158,6 +158,7 @@ impl DescriptorWallet {
             gap: args.gap,
             transactions: BTreeMap::new(),
             network: Some(network),
+            last_synced: None,
         })
     }
 
@@ -170,6 +171,7 @@ impl DescriptorWallet {
             // last_synced: None,
             transactions: BTreeMap::new(),
             network: None,
+            last_synced: None,
         })
     }
 
@@ -239,14 +241,18 @@ impl DescriptorWallet {
         // self.transactions = transactions;
     }
 
+    pub fn update_last_synced(&mut self, height: u32) {
+        self.last_synced = Some(height);
+    }
+
     pub fn get_network(&self) -> Result<Network, Error> {
         get_network(self.network.clone())
     }
 
     pub fn get_name(&self) -> Result<String, Error> {
-        log::info!("get_name called");
+        log::trace!("get_name called");
         let network = get_network(self.network.clone());
-        log::info!("get_network succeeded");
+        log::trace!("get_network succeeded");
         Ok(wallet_name_from_descriptor(
             &self.descriptor,
             self.change_descriptor.as_ref(),
@@ -256,7 +262,7 @@ impl DescriptorWallet {
     }
 
     pub async fn fetch_wallet<'a>(
-        &self,
+        &mut self,
         db_dir: PathBuf,
         brpc_host: String,
         brpc_port: u16,
@@ -372,11 +378,23 @@ impl DescriptorWallet {
             });
         }
 
-        // let descriptors = &[external_descriptor, internal_descriptor];
+        wallet.set_lookahead_for_all(20)?;
+
+        // let chain_tip = wallet.latest_checkpoint();
+        log::info!("last_synced = {:?}", self.last_synced);
+        let start_height: Option<u64> = match self.last_synced {
+            Some(ct) => Some(ct.into()),
+            None => None,
+        };
+        // let mut emitter = match chain_tip {
+        //     Some(cp) => Emitter::from_checkpoint(&rpc_client, cp),
+        //     None => Emitter::from_height(&rpc_client, args[5].parse::<u32>()?),
+        // };
+
         let descriptors = &descriptors_vec[..];
         let request = ScanBlocksRequest {
             scanobjects: descriptors,
-            start_height: None,
+            start_height,
             stop_height: None,
             filtertype: None,
             options: Some(ScanBlocksOptions {
@@ -399,16 +417,8 @@ impl DescriptorWallet {
         //         )?,
         //     ],
         // };
-        // println!("scanblocks result: {:?}", res);
-        // println!("wallet = {:?}", wallet);
-
-        wallet.set_lookahead_for_all(20)?;
-
-        // let chain_tip = wallet.latest_checkpoint();
-        // let mut emitter = match chain_tip {
-        //     Some(cp) => Emitter::from_checkpoint(&rpc_client, cp),
-        //     None => Emitter::from_height(&rpc_client, args[5].parse::<u32>()?),
-        // };
+        log::trace!("scanblocks result: {:?}", res);
+        log::trace!("wallet = {:?}", wallet);
 
         let mut prev_block_id = None;
 
@@ -421,6 +431,8 @@ impl DescriptorWallet {
             wallet.commit()?;
             prev_block_id = Some(BlockId { height, hash: bh });
         }
+
+        self.update_last_synced(res.to_height.try_into().unwrap());
 
         // while let Some((height, block)) = emitter.next_block()? {
         //     println!("Applying block {} at height {}", block.block_hash(), height);
