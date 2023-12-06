@@ -32,7 +32,6 @@ use bdk::bitcoin::Transaction;
 use smaug::state::{Smaug, State};
 
 #[tokio::main]
-// #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), anyhow::Error> {
     let builder = Builder::new(tokio::io::stdin(), tokio::io::stdout())
         .option(options::ConfigOption::new(
@@ -161,8 +160,11 @@ async fn main() -> Result<(), anyhow::Error> {
                 Some(deserialized) => match serde_json::from_str(&deserialized) {
                     core::result::Result::Ok(dws) => dws,
                     core::result::Result::Err(e) => {
-                        // sometimes log::error! doesn't execute before plugin is killed
-                        eprintln!("Error parsing wallet from datastore: {:?}", &r.datastore[0].string);
+                        // sometimes log::error! doesn't execute before plugin is killed, so we use eprintln! here instead
+                        eprintln!(
+                            "Error parsing wallet from datastore: {:?}",
+                            &r.datastore[0].string
+                        );
                         eprintln!("{}", e);
                         eprintln!("This is probably due to an outdated wallet format.");
                         eprintln!("Please delete the wallet with `lightning-cli deldatastore smaug` and restart Smaug.");
@@ -219,7 +221,6 @@ enum Commands {
     #[command(alias = "del", alias = "delete", alias = "remove")]
     Rm {
         /// Deterministic name (concatenated checksums) of wallet to delete
-        // #[arg(short, long)]
         descriptor_name: String,
     },
     /// List descriptor wallets currently being watched
@@ -286,16 +287,10 @@ async fn parse_command(
     }
 }
 
-async fn add(
-    plugin: Plugin<State>,
-    // v: serde_json::Value,
-    args: AddArgs,
-) -> Result<serde_json::Value, Error> {
+async fn add(plugin: Plugin<State>, args: AddArgs) -> Result<serde_json::Value, Error> {
     let mut dw = DescriptorWallet::from_args(args, plugin.state().lock().await.network.clone())
         .map_err(|e| anyhow!("error parsing args: {}", e))?;
-    // dw.network = );
     log::trace!("params = {:?}", dw);
-    // {
     let (db_dir, brpc_host, brpc_port, brpc_user, brpc_pass) = {
         let state = plugin.state().lock().await;
         (
@@ -367,10 +362,7 @@ struct ListResponseItem {
     pub network: Option<String>,
 }
 
-async fn list(
-    plugin: Plugin<State>,
-    // _v: serde_json::Value,
-) -> Result<serde_json::Value, Error> {
+async fn list(plugin: Plugin<State>) -> Result<serde_json::Value, Error> {
     let state = &plugin.state().lock().await;
 
     let wallets = state.wallets.clone();
@@ -392,7 +384,6 @@ async fn list(
 
 async fn delete(
     plugin: Plugin<State>,
-    // v: serde_json::Value,
     descriptor_name: String,
 ) -> Result<serde_json::Value, Error> {
     let wallets = &mut plugin.state().lock().await.wallets;
@@ -457,7 +448,6 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
             )
             .await?;
 
-        // let wallet = dw.fetch_wallet(db_dir.clone()).await?;
         log::trace!("...fetched wallet in block_handler");
         let bdk_transactions_iter = wallet.transactions();
         let mut transactions = Vec::<CanonicalTx<'_, Transaction, ConfirmationTimeAnchor>>::new();
@@ -483,6 +473,8 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
             log::debug!("found no transactions");
         }
         log::info!("scanned up to height {}", dw_clone.last_synced.unwrap());
+
+        // FIXME: this is horrible, please find a better way to do this
         dw.update_last_synced(dw_clone.last_synced.unwrap());
     }
     log::trace!("returning from block_added_handler");
