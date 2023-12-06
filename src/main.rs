@@ -73,11 +73,11 @@ async fn main() -> Result<(), anyhow::Error> {
     } else {
         return Ok(());
     };
-    log::info!(
+    log::debug!(
         "Configuration from CLN main daemon: {:?}",
         configured_plugin.configuration()
     );
-    log::info!(
+    log::debug!(
         "smaug_network = {:?}, cln_network = {}",
         configured_plugin.option("smaug_network"),
         configured_plugin.configuration().network
@@ -131,7 +131,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 ))
             }
         },
-        None => return Err(anyhow!("must specify smaug_brpc_user")),
+        None => return Err(anyhow!("must specify smaug_brpc_pass")),
     };
     let ln_dir: PathBuf = configured_plugin.configuration().lightning_dir.into();
     // Create data dir if it does not exist
@@ -139,12 +139,12 @@ async fn main() -> Result<(), anyhow::Error> {
         log::error!("Cannot create data dir: {e:?}");
         std::process::exit(1);
     });
-    log::info!("network = {}", network);
+    log::trace!("network = {}", network);
     let rpc_file = configured_plugin.configuration().rpc_file;
     let p = Path::new(&rpc_file);
 
     let mut rpc = ClnRpc::new(p).await?;
-    log::info!("calling listdatastore");
+    log::trace!("calling listdatastore");
 
     let lds_response = rpc
         .call(Request::ListDatastore(ListdatastoreRequest {
@@ -152,7 +152,7 @@ async fn main() -> Result<(), anyhow::Error> {
         }))
         .await
         .map_err(|e| anyhow!("Error calling listdatastore: {:?}", e))?;
-    log::info!("fetching wallets from listdatastore response");
+    log::trace!("fetching wallets from listdatastore response");
     let wallets: BTreeMap<String, DescriptorWallet> = match lds_response {
         Response::ListDatastore(r) => match r.datastore.is_empty() {
             true => BTreeMap::new(),
@@ -176,7 +176,7 @@ async fn main() -> Result<(), anyhow::Error> {
         },
         _ => panic!("Unrecognized type returned from listdatastore call, exiting"),
     };
-    log::info!("creating plugin state");
+    log::trace!("creating plugin state");
     let watch_descriptor = Smaug {
         wallets,
         network: network.clone(),
@@ -187,10 +187,10 @@ async fn main() -> Result<(), anyhow::Error> {
         db_dir: ln_dir.join(SMAUG_DATADIR),
     };
     let plugin_state = Arc::new(Mutex::new(watch_descriptor.clone()));
-    log::info!("getting lock on state");
+    log::trace!("getting lock on state");
 
     plugin_state.lock().await.network = network;
-    log::info!("starting Smaug");
+    log::trace!("starting Smaug");
 
     let plugin = configured_plugin.start(plugin_state).await?;
     log::info!("Smaug started");
@@ -472,7 +472,7 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
         } else {
             log::debug!("found no transactions");
         }
-        log::info!("scanned up to height {}", dw_clone.last_synced.unwrap());
+        log::debug!("scanned up to height {}", dw_clone.last_synced.unwrap());
 
         // FIXME: this is horrible, please find a better way to do this
         dw.update_last_synced(dw_clone.last_synced.unwrap());
