@@ -74,11 +74,11 @@ async fn main() -> Result<(), anyhow::Error> {
     } else {
         return Ok(());
     };
-    log::debug!(
+    log::info!(
         "Configuration from CLN main daemon: {:?}",
         configured_plugin.configuration()
     );
-    log::debug!(
+    log::info!(
         "smaug_network = {:?}, cln_network = {}",
         configured_plugin.option("smaug_network"),
         configured_plugin.configuration().network
@@ -140,17 +140,20 @@ async fn main() -> Result<(), anyhow::Error> {
         log::error!("Cannot create data dir: {e:?}");
         std::process::exit(1);
     });
-    log::debug!("network = {}", network);
+    log::info!("network = {}", network);
     let rpc_file = configured_plugin.configuration().rpc_file;
     let p = Path::new(&rpc_file);
 
     let mut rpc = ClnRpc::new(p).await?;
+    log::info!("calling listdatastore");
+
     let lds_response = rpc
         .call(Request::ListDatastore(ListdatastoreRequest {
             key: Some(vec!["smaug".to_owned()]),
         }))
         .await
         .map_err(|e| anyhow!("Error calling listdatastore: {:?}", e))?;
+    log::info!("fetching wallets from listdatastore response");
     let wallets: BTreeMap<String, DescriptorWallet> = match lds_response {
         Response::ListDatastore(r) => match r.datastore.is_empty() {
             true => BTreeMap::new(),
@@ -158,6 +161,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 Some(deserialized) => match serde_json::from_str(&deserialized) {
                     core::result::Result::Ok(dws) => dws,
                     core::result::Result::Err(e) => {
+                        log::error!("Error parsing wallet from datastore: {:?}", &r.datastore[0].string);
                         log::error!("{}", e);
                         return Err(e.into());
                     }
@@ -165,8 +169,9 @@ async fn main() -> Result<(), anyhow::Error> {
                 None => BTreeMap::new(),
             },
         },
-        _ => panic!(),
+        _ => panic!("Unrecognized type returned from listdatastore call, exiting"),
     };
+    log::info!("creating plugin state");
     let watch_descriptor = Smaug {
         wallets,
         network: network.clone(),
@@ -177,7 +182,11 @@ async fn main() -> Result<(), anyhow::Error> {
         db_dir: ln_dir.join(SMAUG_DATADIR),
     };
     let plugin_state = Arc::new(Mutex::new(watch_descriptor.clone()));
+    log::info!("getting lock on state");
+
     plugin_state.lock().await.network = network;
+    log::info!("starting Smaug");
+
     let plugin = configured_plugin.start(plugin_state).await?;
     log::info!("Smaug started");
     plugin.join().await
