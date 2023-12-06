@@ -203,6 +203,10 @@ impl DescriptorWallet {
         })
     }
 
+    fn sats_to_msats(amount: u64) -> u64 {
+        amount * 1000
+    }
+
     // pub fn update_last_synced(&mut self, last_synced: BlockTime) {
     //     self.last_synced = Some(last_synced);
     // }
@@ -347,7 +351,7 @@ impl DescriptorWallet {
                                     "account": acct,
                                     "outpoint": outpoint,
                                     "spending_txid": tx.txid.to_string(),
-                                    "amount_msat": amount,
+                                    "amount_msat": Self::sats_to_msats(amount),
                                     "coin_type": "bcrt",
                                     "timestamp": format!("{}", time),
                                     "blockheight": format!("{}", height),
@@ -399,7 +403,7 @@ impl DescriptorWallet {
                                     "transfer_from": transfer_from,
                                     "outpoint": outpoint,
                                     "spending_txid": tx.txid.to_string(),
-                                    "amount_msat": amount,
+                                    "amount_msat": Self::sats_to_msats(amount),
                                     "coin_type": "bcrt",
                                     "timestamp": format!("{}", time),
                                     "blockheight": format!("{}", height),
@@ -471,7 +475,7 @@ impl DescriptorWallet {
                                         "transfer_from": transfer_from,
                                         "outpoint": outpoint,
                                         "spending_txid": tx.txid.to_string(),
-                                        "amount_msat": amount,
+                                        "amount_msat": Self::sats_to_msats(amount),
                                         "coin_type": "bcrt",
                                         "timestamp": format!("{}", time),
                                         "blockheight": format!("{}", height),
@@ -530,7 +534,7 @@ impl DescriptorWallet {
                                         "account": acct,
                                         "outpoint": outpoint,
                                         "spending_txid": tx.txid.to_string(),
-                                        "amount_msat": amount,
+                                        "amount_msat": Self::sats_to_msats(amount),
                                         "coin_type": "bcrt",
                                         "timestamp": format!("{}", time),
                                         "blockheight": format!("{}", height),
@@ -589,7 +593,7 @@ impl DescriptorWallet {
                                     "transfer_from": transfer_from,
                                     "outpoint": outpoint,
                                     "spending_txid": tx.txid.to_string(),
-                                    "amount_msat": amount,
+                                    "amount_msat": Self::sats_to_msats(amount),
                                     "coin_type": "bcrt",
                                     "timestamp": format!("{}", time),
                                     "blockheight": format!("{}", height),
