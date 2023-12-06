@@ -1,12 +1,10 @@
-use anyhow::{anyhow, Chain};
+use anyhow::anyhow;
 use bdk::{
     bitcoin::{
         secp256k1::{All, Secp256k1},
-        BlockHash, Network, Transaction, Txid,
+        Network, Transaction, Txid,
     },
-    chain::{
-        tx_graph::CanonicalTx, BlockId, ChainPosition, ConfirmationTime, ConfirmationTimeAnchor,
-    },
+    chain::{tx_graph::CanonicalTx, BlockId, ChainPosition, ConfirmationTimeAnchor},
     wallet::wallet_name_from_descriptor,
     Wallet,
 };
@@ -21,13 +19,11 @@ use clap::{command, Parser};
 use cln_plugin::{Error, Plugin};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{collections::BTreeMap, fmt, path::PathBuf, str::FromStr, time::Duration};
+use std::{collections::BTreeMap, fmt, path::PathBuf, time::Duration};
 
 use crate::state::State;
 
 pub const SMAUG_DATADIR: &str = ".smaug";
-const STOP_GAP: usize = 50;
-const PARALLEL_REQUESTS: usize = 5;
 
 pub const UTXO_DEPOSIT_TAG: &str = "utxo_deposit";
 pub const UTXO_SPENT_TAG: &str = "utxo_spent";
