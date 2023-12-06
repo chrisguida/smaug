@@ -116,6 +116,7 @@ checksum = "604178f6c5c21f02dc555784810edfb88d34ac2c73b2eae109655649ee73ce3d"
 [[package]]
 name = "bdk"
 version = "1.0.0-alpha.2"
+source = "git+https://github.com/chrisguida/bdk?rev=cc32e69a12b8c30e571e6261a8b99dec2cef6ff5#cc32e69a12b8c30e571e6261a8b99dec2cef6ff5"
 dependencies = [
  "bdk_chain",
  "bitcoin 0.30.2",
@@ -131,6 +132,7 @@ dependencies = [
 [[package]]
 name = "bdk_chain"
 version = "0.6.0"
+source = "git+https://github.com/chrisguida/bdk?rev=cc32e69a12b8c30e571e6261a8b99dec2cef6ff5#cc32e69a12b8c30e571e6261a8b99dec2cef6ff5"
 dependencies = [
  "bitcoin 0.30.2",
  "miniscript",
@@ -140,6 +142,7 @@ dependencies = [
 [[package]]
 name = "bdk_file_store"
 version = "0.2.0"
+source = "git+https://github.com/chrisguida/bdk?rev=cc32e69a12b8c30e571e6261a8b99dec2cef6ff5#cc32e69a12b8c30e571e6261a8b99dec2cef6ff5"
 dependencies = [
  "bdk_chain",
  "bincode",
@@ -216,6 +219,7 @@ dependencies = [
 [[package]]
 name = "bitcoincore-rpc"
 version = "0.17.0"
+source = "git+https://github.com/chrisguida/rust-bitcoincore-rpc?branch=feat/scanblocks#23927f3e8b3bd413e0bf8b7c42b9531345bdd1a3"
 dependencies = [
  "bitcoin-private",
  "bitcoincore-rpc-json",
@@ -228,6 +232,7 @@ dependencies = [
 [[package]]
 name = "bitcoincore-rpc-json"
 version = "0.17.0"
+source = "git+https://github.com/chrisguida/rust-bitcoincore-rpc?branch=feat/scanblocks#23927f3e8b3bd413e0bf8b7c42b9531345bdd1a3"
 dependencies = [
  "bitcoin 0.30.2",
  "bitcoin-private",
