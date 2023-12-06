@@ -384,7 +384,6 @@ impl DescriptorWallet {
 
         wallet.set_lookahead_for_all(20)?;
 
-        // let chain_tip = wallet.latest_checkpoint();
         log::info!("last_synced = {:?}", self.last_synced);
         let start_height: Option<u64> = match self.last_synced {
             Some(ct) => Some(ct.into()),
@@ -424,7 +423,11 @@ impl DescriptorWallet {
         log::trace!("scanblocks result: {:?}", res);
         log::trace!("wallet = {:?}", wallet);
 
-        let mut prev_block_id = None;
+        let chain_tip = wallet.latest_checkpoint();
+        let mut prev_block_id = match chain_tip {
+            Some(ct) => Some(ct.block_id()),
+            None => None,
+        };
 
         for bh in res.relevant_blocks {
             // self.get_relevant_txs(bh, &conn);
@@ -437,6 +440,8 @@ impl DescriptorWallet {
         }
 
         self.update_last_synced(res.to_height.try_into().unwrap());
+
+        log::info!("last_synced after scan = {:?}", self.last_synced);
 
         // while let Some((height, block)) = emitter.next_block()? {
         //     println!("Applying block {} at height {}", block.block_hash(), height);
