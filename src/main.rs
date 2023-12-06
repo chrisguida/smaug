@@ -284,25 +284,17 @@ async fn add(
     // dw.network = );
     log::trace!("params = {:?}", dw);
     // {
-    let state = &plugin.state().lock().await;
-    let brpc_host = state.brpc_host.clone();
-    let brpc_port = state.brpc_port.clone();
-    let brpc_user = state.brpc_user.clone();
-    let brpc_pass = state.brpc_pass.clone();
-    let db_dir = state.db_dir.clone();
-    // match dw
-    //     .scanblocks(brpc_host, brpc_port, brpc_user, brpc_pass)
-    //     .await
-    // {
-    //     Ok(_) => {
-    //         log::info!("scan succeeded");
-    //     }
-    //     Err(e) => {
-    //         log::info!("scan failed: {}", e);
-    //     }
-    // };
-    // }
-    let dw_clone = dw.clone();
+    let (db_dir, brpc_host, brpc_port, brpc_user, brpc_pass) = {
+        let state = plugin.state().lock().await;
+        (
+            state.db_dir.clone(),
+            state.brpc_host.clone(),
+            state.brpc_port.clone(),
+            state.brpc_user.clone(),
+            state.brpc_pass.clone(),
+        )
+    };
+    let mut dw_clone = dw.clone();
     let wallet = dw_clone
         .fetch_wallet(db_dir, brpc_host, brpc_port, brpc_user, brpc_pass)
         .await?;
@@ -325,10 +317,11 @@ async fn add(
             log::debug!("no new txs this time");
         }
     }
-    log::info!("waiting for wallet lock");
+    dw.update_last_synced(dw_clone.last_synced.unwrap());
+    log::trace!("waiting for wallet lock");
     plugin.state().lock().await.add_descriptor_wallet(&dw)?;
 
-    log::info!("add_descriptor_wallet");
+    log::trace!("add_descriptor_wallet");
     let wallets_str = json!(plugin.state().lock().await.wallets).to_string();
     let rpc_file = plugin.configuration().rpc_file;
     let p = Path::new(&rpc_file);
@@ -349,7 +342,7 @@ async fn add(
         "Wallet with deterministic name {} successfully added",
         &dw.get_name()?
     );
-    log::info!("returning");
+    log::trace!("returning");
     Ok(json!(message))
 }
 
@@ -421,17 +414,16 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
         "Smaug state!!! {:?}",
         plugin.state().lock().await.wallets.clone()
     );
-    let state = &plugin.state().lock().await;
-    let brpc_host = state.brpc_host.clone();
-    let brpc_port = state.brpc_port.clone();
-    let brpc_user = state.brpc_user.clone();
-    let brpc_pass = state.brpc_pass.clone();
-    let db_dir = state.db_dir.clone();
-    // log::trace!("waiting for db_dir lock in block_handler");
-    // let db_dir = {
-    //     let state = plugin.state().lock().await;
-    //     state.db_dir.clone()
-    // };
+    let (db_dir, brpc_host, brpc_port, brpc_user, brpc_pass) = {
+        let state = plugin.state().lock().await;
+        (
+            state.db_dir.clone(),
+            state.brpc_host.clone(),
+            state.brpc_port.clone(),
+            state.brpc_user.clone(),
+            state.brpc_pass.clone(),
+        )
+    };
 
     log::trace!("waiting for wallet lock in block_handler");
     let state = &mut plugin.state().lock().await;
@@ -442,7 +434,7 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
     for (_dw_desc, dw) in descriptor_wallets.iter_mut() {
         log::trace!("fetching wallet in block_handler: {:?}", dw);
 
-        let dw_clone = dw.clone();
+        let mut dw_clone = dw.clone();
         let wallet = dw_clone
             .fetch_wallet(
                 db_dir.clone(),
@@ -478,6 +470,8 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
         } else {
             log::debug!("found no transactions");
         }
+        log::info!("scanned up to height {}", dw_clone.last_synced.unwrap());
+        dw.update_last_synced(dw_clone.last_synced.unwrap());
     }
     log::trace!("returning from block_added_handler");
     Ok(())
