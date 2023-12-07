@@ -71,19 +71,31 @@ pub enum WDNetwork {
     Mutinynet,
 }
 
-pub fn get_network_url(network: &str) -> String {
+pub fn get_esplora_url(network: &str) -> String {
     match network {
         "bitcoin" | "mainnet" => "https://blockstream.info/api".to_owned(),
         "testnet" => "https://blockstream.info/testnet/api".to_owned(),
         "regtest" | "mutinynet" => "https://mutinynet.com/api".to_owned(),
         "signet" => "https://mempool.space/signet/api".to_owned(),
         _ => {
-            panic!();
+            panic!("network must be bitcoin, testnet, regtest, signet, or mutinynet");
         }
     }
 }
 
-pub fn get_network(network: Option<String>) -> Result<Network, Error> {
+pub fn get_currency(network: Network) -> String {
+    match network {
+        Network::Bitcoin => "bc".to_owned(),
+        Network::Regtest => "bcrt".to_owned(),
+        Network::Signet => "tbs".to_owned(),
+        Network::Testnet => "tb".to_owned(),
+        _ => {
+            panic!("Unknown bitcoin::network::constants::Network match arm");
+        }
+    }
+}
+
+pub fn parse_network(network: &Option<String>) -> Result<Network, Error> {
     return match network {
         Some(n) => match n.as_str() {
             "mutinynet" => Ok(Network::Signet),
@@ -94,6 +106,10 @@ pub fn get_network(network: Option<String>) -> Result<Network, Error> {
         },
         None => return Err(anyhow!("network is None")),
     };
+}
+
+fn parse_currency(network: &Option<String>) -> Result<String, Error> {
+    Ok(get_currency(parse_network(network)?))
 }
 
 fn find_closest_lower_key(map: &BTreeMap<u32, BlockHash>, key: u32) -> Option<(u32, BlockHash)> {
@@ -244,12 +260,12 @@ impl DescriptorWallet {
     }
 
     pub fn get_network(&self) -> Result<Network, Error> {
-        get_network(self.network.clone())
+        parse_network(&self.network)
     }
 
     pub fn get_name(&self) -> Result<String, Error> {
         log::trace!("get_name called");
-        let network = get_network(self.network.clone());
+        let network = parse_network(&self.network);
         log::trace!("get_network succeeded");
         Ok(wallet_name_from_descriptor(
             &self.descriptor,
@@ -373,6 +389,7 @@ impl DescriptorWallet {
         wallet: &Wallet<Store<'_, bdk::wallet::ChangeSet>>,
         tx: &CanonicalTx<'_, Transaction, ConfirmationTimeAnchor>,
     ) -> Result<(), Error> {
+        let coin_type = parse_currency(&self.network)?;
         // send spent notification for each input
         for input in tx.tx_node.tx.input.iter() {
             if let Some(po) = wallet.tx_graph().get_txout(input.previous_output) {
@@ -390,7 +407,7 @@ impl DescriptorWallet {
                             "outpoint": outpoint,
                             "spending_txid": tx.tx_node.txid,
                             "amount_msat": Self::sats_to_msats(amount),
-                            "coin_type": "bcrt",
+                            "coin_type": coin_type,
                             "timestamp": format!("{}", a.confirmation_time),
                             "blockheight": format!("{}", a.confirmation_height),
                         }});
@@ -436,7 +453,7 @@ impl DescriptorWallet {
                             "outpoint": outpoint,
                             "spending_txid": tx.tx_node.txid,
                             "amount_msat": Self::sats_to_msats(amount),
-                            "coin_type": "bcrt",
+                            "coin_type": coin_type,
                             "timestamp": format!("{}", a.confirmation_time),
                             "blockheight": format!("{}", a.confirmation_height),
                     }});
@@ -465,6 +482,7 @@ impl DescriptorWallet {
         wallet: &Wallet<Store<'_, bdk::wallet::ChangeSet>>,
         tx: &CanonicalTx<'_, Transaction, ConfirmationTimeAnchor>,
     ) -> Result<(), Error> {
+        let coin_type = parse_currency(&self.network)?;
         for (vout, output) in tx.tx_node.tx.output.iter().enumerate() {
             if wallet.is_mine(&output.script_pubkey) {
                 match tx.chain_position {
@@ -492,7 +510,7 @@ impl DescriptorWallet {
                                 "outpoint": outpoint,
                                 "spending_txid": tx.tx_node.txid.to_string(),
                                 "amount_msat": Self::sats_to_msats(amount),
-                                "coin_type": "bcrt",
+                                "coin_type": coin_type,
                                 "timestamp": format!("{}", a.confirmation_time),
                                 "blockheight": format!("{}", a.confirmation_height),
                         }});
@@ -526,6 +544,7 @@ impl DescriptorWallet {
         wallet: &Wallet<Store<'_, bdk::wallet::ChangeSet>>,
         tx: &CanonicalTx<'_, Transaction, ConfirmationTimeAnchor>,
     ) -> Result<(), Error> {
+        let coin_type = parse_currency(&self.network)?;
         for input in tx.tx_node.input.iter() {
             if let Some(po) = wallet.tx_graph().get_txout(input.previous_output) {
                 match tx.chain_position {
@@ -543,7 +562,7 @@ impl DescriptorWallet {
                                 "outpoint": outpoint,
                                 "spending_txid": tx.tx_node.txid.to_string(),
                                 "amount_msat": Self::sats_to_msats(amount),
-                                "coin_type": "bcrt",
+                                "coin_type": coin_type,
                                 "timestamp": format!("{}", a.confirmation_time),
                                 "blockheight": format!("{}", a.confirmation_height),
                             }});
@@ -596,7 +615,7 @@ impl DescriptorWallet {
                             "outpoint": outpoint,
                             "spending_txid": tx.tx_node.txid,
                             "amount_msat": Self::sats_to_msats(amount),
-                            "coin_type": "bcrt",
+                            "coin_type": coin_type,
                             "timestamp": format!("{}", a.confirmation_time),
                             "blockheight": format!("{}", a.confirmation_height),
                     }});
