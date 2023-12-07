@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use bdk::{
     bitcoin::{
         secp256k1::{All, Secp256k1},
-        Network, Transaction, Txid,
+        BlockHash, Network, Transaction, Txid,
     },
     chain::{tx_graph::CanonicalTx, BlockId, ChainPosition, ConfirmationTimeAnchor},
     wallet::wallet_name_from_descriptor,
@@ -94,6 +94,11 @@ pub fn get_network(network: Option<String>) -> Result<Network, Error> {
         },
         None => return Err(anyhow!("network is None")),
     };
+}
+
+fn find_closest_lower_key(map: &BTreeMap<u32, BlockHash>, key: u32) -> Option<(u32, BlockHash)> {
+    let mut iter = map.range(..key);
+    iter.next_back().map(|(&k, v)| (k, v.clone()))
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Parser)]
@@ -331,9 +336,22 @@ impl DescriptorWallet {
             None => None,
         };
 
+        // prev_block_id needs to be the block immediately before our current block
+
         for bh in res.relevant_blocks {
             let block = rpc_client.get_block(&bh)?;
             let height: u32 = block.bip34_block_height()?.try_into().unwrap();
+            if let Some(p) = prev_block_id {
+                if height <= p.height {
+                    if let Some((height, hash)) =
+                        find_closest_lower_key(wallet.local_chain().blocks(), height)
+                    {
+                        prev_block_id = Some(BlockId { height, hash });
+                    } else {
+                        prev_block_id = None;
+                    }
+                };
+            }
             wallet.apply_block_relevant(block.clone(), prev_block_id, height)?;
             wallet.commit()?;
             prev_block_id = Some(BlockId { height, hash: bh });
