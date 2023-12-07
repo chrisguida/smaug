@@ -44,7 +44,7 @@ Run build:
 cargo build --release
 ```
 
-CLN can be a bit challenging to set up and run on Mac. See this gist for hints: 
+CLN can be a bit challenging to set up and run on Mac. See [this gist](https://gist.github.com/chrisguida/a2adf91dca5787c295f7d59d7d20958c) for hints.
 
 ## Installation
 
