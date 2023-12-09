@@ -482,3 +482,92 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
     log::trace!("returning from block_added_handler");
     Ok(())
 }
+
+// #[tokio::test]
+// async fn test_list() {
+//     let builder = Builder::new(tokio::io::stdin(), tokio::io::stdout())
+//     .dynamic();
+//     let plugin = Plugin {
+//         /// The state gets cloned for each request
+//         state: S,
+//         /// "options" field of "init" message sent by cln
+//         options: Vec<ConfigOption>,
+//         /// "configuration" field of "init" message sent by cln
+//         configuration: Configuration,
+//         /// A signal that allows us to wait on the plugin's shutdown.
+//         wait_handle: tokio::sync::broadcast::Sender<()>,
+
+//         sender: tokio::sync::mpsc::Sender<serde_json::Value>,
+//     };
+//     println!("plugin = {:?}", plugin);
+// }
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use async_trait::async_trait;
+//     use mockall::mock;
+//     use std::sync::{Arc, Mutex};
+
+//     // Mocking a simplified version of Wallet and State
+//     #[derive(Clone)]
+//     struct Wallet {
+//         pub descriptor: String,
+//         pub change_descriptor: Option<String>,
+//         pub birthday: Option<u32>,
+//         pub gap: Option<u32>,
+//         pub network: Option<String>,
+//     }
+
+//     struct State {
+//         pub wallets: BTreeMap<String, Wallet>,
+//     }
+
+//     #[async_trait]
+//     pub trait StateHolder {
+//         async fn state(&self) -> Arc<Mutex<State>>;
+//     }
+
+//     mock! {
+//         Plugin {}
+
+//         #[async_trait]
+//         impl StateHolder for Plugin<State> {
+//             async fn state(&self) -> Arc<Mutex<State>>;
+//         }
+//     }
+
+//     #[tokio::test]
+//     async fn test_list_function() {
+//         // Setup mock state
+//         let mut wallets = BTreeMap::new();
+//         wallets.insert(
+//             "wallet1".to_string(),
+//             Wallet {
+//                 descriptor: "descriptor1".to_string(),
+//                 change_descriptor: Some("change1".to_string()),
+//                 birthday: Some(123),
+//                 gap: Some(5),
+//                 network: Some("network1".to_string()),
+//             },
+//         );
+
+//         let plugin = MockPlugin::new(wallets);
+
+//         // Call the function
+//         let result = list(plugin).await.unwrap();
+
+//         // Assert the expected outcome
+//         let expected_json = json!({
+//             "wallet1": {
+//                 "descriptor": "descriptor1",
+//                 "change_descriptor": "change1",
+//                 "birthday": 123,
+//                 "gap": 5,
+//                 "network": "network1"
+//             }
+//         });
+
+//         assert_eq!(result, expected_json);
+//     }
+// }
