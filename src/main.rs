@@ -37,7 +37,10 @@ use smaug::state::{Smaug, State};
 async fn main() -> Result<(), anyhow::Error> {
     // std::env::set_var("CLN_PLUGIN_LOG", "cln_plugin=info,cln_rpc=info,debug");
     eprintln!("STARTING SMAUG");
-    eprintln!("log set to {}", std::env::var("CLN_PLUGIN_LOG")?);
+    eprintln!(
+        "log set to {}",
+        std::env::var("CLN_PLUGIN_LOG").unwrap_or_default()
+    );
     let builder = Builder::new(tokio::io::stdin(), tokio::io::stdout())
         .option(options::ConfigOption::new(
             "smaug_network",
