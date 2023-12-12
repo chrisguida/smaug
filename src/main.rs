@@ -141,17 +141,19 @@ async fn main() -> Result<(), anyhow::Error> {
             }
         }
     }
-    if let Some(smaug_brpc_cookie_dir) = configured_plugin.option("smaug_brpc_cookie_dir") {
-        if let Some(sbcd) = smaug_brpc_cookie_dir.as_str() {
-            brpc_auth = Auth::CookieFile(PathBuf::from(sbcd).join(".cookie"))
-        } else {
-            if network == "regtest" {
-                brpc_auth = Auth::CookieFile(
-                    home_dir()
-                        .expect("cannot determine home dir")
-                        .join(".bitcoin/regtest")
-                        .join(".cookie"),
-                );
+    if let Auth::None = brpc_auth {
+        if let Some(smaug_brpc_cookie_dir) = configured_plugin.option("smaug_brpc_cookie_dir") {
+            if let Some(sbcd) = smaug_brpc_cookie_dir.as_str() {
+                brpc_auth = Auth::CookieFile(PathBuf::from(sbcd).join(".cookie"))
+            } else {
+                if network == "regtest" {
+                    brpc_auth = Auth::CookieFile(
+                        home_dir()
+                            .expect("cannot determine home dir")
+                            .join(".bitcoin/regtest")
+                            .join(".cookie"),
+                    );
+                }
             }
         }
     }
