@@ -368,13 +368,10 @@ async fn add(plugin: Plugin<State>, args: AddArgs) -> Result<serde_json::Value, 
         }))
         .await
         .map_err(|e| anyhow!("Error calling listdatastore: {:?}", e))?;
-    log::info!("wallet added");
-    let message = format!(
-        "Wallet with deterministic name {} successfully added",
-        &dw.get_name()?
-    );
-    log::trace!("returning");
-    Ok(json!(message))
+    let name = &dw.get_name()?;
+    let message = format!("Wallet with deterministic name {} successfully added", name);
+    log::info!("{}", message);
+    Ok(json!({"name": name, "message": message}))
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

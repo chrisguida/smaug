@@ -356,7 +356,15 @@ impl DescriptorWallet {
 
         for bh in res.relevant_blocks {
             let block = rpc_client.get_block(&bh)?;
-            let height: u32 = block.bip34_block_height()?.try_into().unwrap();
+            // let height: u32 = block.bip34_block_height()?.try_into().unwrap();
+            // we really should not have to make two separate RPC calls here.
+            // unfortunately rust-bitcoin does not expose an rpc method that returns
+            // both the full transaction dump and the height.
+            let height: u32 = rpc_client
+                .get_block_header_info(&bh)?
+                .height
+                .try_into()
+                .unwrap();
             if let Some(p) = prev_block_id {
                 if height <= p.height {
                     if let Some((height, hash)) =
