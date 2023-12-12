@@ -131,28 +131,27 @@ async fn main() -> Result<(), anyhow::Error> {
                     brpc_auth = Auth::UserPass(sbu.to_owned(), sbp.to_owned());
                 }
             }
-        }
-        if let Auth::None = brpc_auth {
-            return Err(anyhow!(
-                "specified `smaug_brpc_user` but did not specify `smaug_brpc_pass`"
-            ));
-        }
-    } else {
-        if let Some(smaug_brpc_cookie_dir) = configured_plugin.option("smaug_brpc_cookie_dir") {
-            if let Some(sbcd) = smaug_brpc_cookie_dir.as_str() {
-                brpc_auth = Auth::CookieFile(PathBuf::from(sbcd).join(".cookie"))
-            } else {
-                if network == "regtest" {
-                    brpc_auth = Auth::CookieFile(
-                        home_dir()
-                            .expect("cannot determine home dir")
-                            .join(".bitcoin/regtest")
-                            .join(".cookie"),
-                    );
-                }
+            if let Auth::None = brpc_auth {
+                return Err(anyhow!(
+                    "specified `smaug_brpc_user` but did not specify `smaug_brpc_pass`"
+                ));
             }
         }
-    };
+    }
+    if let Some(smaug_brpc_cookie_dir) = configured_plugin.option("smaug_brpc_cookie_dir") {
+        if let Some(sbcd) = smaug_brpc_cookie_dir.as_str() {
+            brpc_auth = Auth::CookieFile(PathBuf::from(sbcd).join(".cookie"))
+        } else {
+            if network == "regtest" {
+                brpc_auth = Auth::CookieFile(
+                    home_dir()
+                        .expect("cannot determine home dir")
+                        .join(".bitcoin/regtest")
+                        .join(".cookie"),
+                );
+            }
+        }
+    }
     if let Auth::None = brpc_auth {
         return Err(anyhow!("must specify either `smaug_bprc_cookie_dir` or `smaug_brpc_user` and `smaug_brpc_pass`"));
     }
