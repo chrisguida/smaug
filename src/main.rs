@@ -114,12 +114,12 @@ async fn main() -> Result<(), anyhow::Error> {
         Some(smaug_brpc_port) => match smaug_brpc_port.as_i64() {
             Some(sbp) => u16::try_from(sbp)?,
             None => match network.as_str() {
-                "regtest" => 18334,
+                "regtest" => 18443,
                 _ => 8332,
             },
         },
         None => match network.as_str() {
-            "regtest" => 18334,
+            "regtest" => 18443,
             _ => 8332,
         },
     };

@@ -304,6 +304,12 @@ impl DescriptorWallet {
         log::trace!("Syncing...");
         log::debug!("using network: {}", json!(self.network).as_str().unwrap());
 
+        log::trace!("using auth = {:?}", brpc_auth);
+        log::trace!(
+            "using url = {}",
+            format!("http://{}:{}", brpc_host.clone(), brpc_port.clone())
+        );
+
         let rpc_client = Client::new_with_timeout(
             &format!("http://{}:{}", brpc_host.clone(), brpc_port.clone()),
             brpc_auth,
