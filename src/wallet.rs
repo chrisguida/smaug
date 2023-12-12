@@ -280,8 +280,7 @@ impl DescriptorWallet {
         db_dir: PathBuf,
         brpc_host: String,
         brpc_port: u16,
-        brpc_user: String,
-        brpc_pass: String,
+        brpc_auth: Auth,
     ) -> Result<Wallet<Store<'_, bdk::wallet::ChangeSet>>, Error> {
         log::trace!("creating path");
         let db_filename = self.get_name()?;
@@ -307,7 +306,8 @@ impl DescriptorWallet {
 
         let rpc_client = Client::new_with_timeout(
             &format!("http://{}:{}", brpc_host.clone(), brpc_port.clone()),
-            Auth::UserPass(brpc_user.clone(), brpc_pass.clone()), // Auth::CookieFile(PathBuf::from("/home/cguida/.bitcoin/regtest/.cookie"))
+            brpc_auth,
+            // Auth::UserPass(brpc_user.clone(), brpc_pass.clone()), // Auth::CookieFile(PathBuf::from("/home/cguida/.bitcoin/regtest/.cookie"))
             Duration::from_secs(3600),
         )?;
 
