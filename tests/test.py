@@ -49,11 +49,10 @@ def test_smaug(node_factory, bitcoind):
     # wait for funds to show up in CLN
     wait_for(lambda: len(l1.rpc.listfunds()["outputs"]) == 1)
 
-    balances = l1.rpc.bkpr_listbalances()
-    # pprint(balances)
+    bkpr_balances = l1.rpc.bkpr_listbalances()
 
     # verify pre-test CLN funds in bkpr
-    btc_balance = only_one(only_one(balances["accounts"])["balances"])
+    btc_balance = only_one(only_one(bkpr_balances["accounts"])["balances"])
     assert btc_balance["balance_msat"] == cln_initial_amount_msat
 
     # get external/internal only_one(descriptors)
@@ -72,15 +71,14 @@ def test_smaug(node_factory, bitcoind):
     name = l1.rpc.smaug("add", external_descriptor, internal_descriptor)["name"]
 
     # verify initial funds in wallet
-    balances = l1.rpc.bkpr_listbalances()["accounts"]
-    pprint(balances)
+    bkpr_balances = l1.rpc.bkpr_listbalances()["accounts"]
 
     # verify pre-test CLN funds in bkpr
-    cln_balance = get_cln_balance(balances)
+    cln_balance = get_cln_balance(bkpr_balances)
     assert cln_balance["coin_type"] == "bcrt"
     assert cln_balance["balance_msat"] == cln_initial_amount_msat
 
-    bitcoind_smaug_balance = get_bitcoind_smaug_balance(name, balances)
+    bitcoind_smaug_balance = get_bitcoind_smaug_balance(name, bkpr_balances)
     assert bitcoind_smaug_balance["coin_type"] == "bcrt"
     assert (
         bitcoind_smaug_balance["balance_msat"]
@@ -144,16 +142,16 @@ def test_smaug(node_factory, bitcoind):
     # wait for new funds to show up in CLN
     wait_for(lambda: len(l1.rpc.listfunds()["outputs"]) == 2)
 
-    balances = l1.rpc.bkpr_listbalances()["accounts"]
+    bkpr_balances = l1.rpc.bkpr_listbalances()["accounts"]
 
     # verify CLN funds in bkpr
-    cln_balance = get_cln_balance(balances)
+    cln_balance = get_cln_balance(bkpr_balances)
     assert (
         cln_balance["balance_msat"] == cln_initial_amount_msat + cln_second_amount_msat
     )
 
     wait_for(
-        lambda: get_bitcoind_smaug_balance(name, balances)["balance_msat"]
+        lambda: get_bitcoind_smaug_balance(name, bkpr_balances)["balance_msat"]
         == get_bitcoind_wallet_bal_sats(bitcoind) * 10**3
     )
 
