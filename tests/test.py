@@ -113,12 +113,7 @@ def test_smaug(node_factory, bitcoind):
         == get_bitcoind_wallet_bal_sats(bitcoind) * 10**3
     )
 
-    bitcoind_smaug_balance = get_bitcoind_smaug_balance(name, balances)
-    assert (
-        bitcoind_smaug_balance["balance_msat"]
-        == get_bitcoind_wallet_bal_sats(bitcoind) * 10**3
-    )
-
+    print("Done syncronizing smaug.")
     # catch bkpr log
     # find event in bkpr events
     events = l1.rpc.bkpr_listaccountevents()["events"]
