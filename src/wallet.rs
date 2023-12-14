@@ -450,12 +450,13 @@ impl DescriptorWallet {
                 }
                 ChainPosition::Confirmed(a) => {
                     let acct: String;
-                    let transfer_from: String;
+                    // all outputs are being transferred from our wallet
+                    let transfer_from = format!("smaug:{}", self.get_name()?);
                     if wallet.is_mine(&output.script_pubkey) {
-                        acct = format!("smaug:{}", self.get_name()?);
-                        transfer_from = "external".to_owned();
+                        // this is a deposit from ourselves to ourselves, ie change
+                        acct = transfer_from.clone();
                     } else {
-                        transfer_from = format!("smaug:{}", self.get_name()?);
+                        // this is a deposit from ourselves to an external wallet
                         acct = "external".to_owned();
                     }
                     let amount = output.value;
@@ -566,34 +567,37 @@ impl DescriptorWallet {
                         continue;
                     }
                     ChainPosition::Confirmed(a) => {
+                        let our_acct = format!("smaug:{}", self.get_name()?);
+                        let ext_acct = "external".to_owned();
+                        let acct: String;
                         if wallet.is_mine(&po.script_pubkey) {
-                            let acct = format!("smaug:{}", self.get_name()?);
-                            let amount = po.value;
-                            let outpoint = format!("{}", input.previous_output.to_string());
-                            log::trace!("outpoint = {}", format!("{}", outpoint));
-                            let onchain_spend = json!({UTXO_SPENT_TAG: {
-                                "account": acct,
-                                "outpoint": outpoint,
-                                "spending_txid": tx.tx_node.txid.to_string(),
-                                "amount_msat": Self::sats_to_msats(amount),
-                                "coin_type": coin_type,
-                                "timestamp": format!("{}", a.confirmation_time),
-                                "blockheight": format!("{}", a.confirmation_height),
-                            }});
-                            log::trace!("INSIDE SEND SPEND NOTIFICATION ON SMAUG SIDE");
-                            let cloned_plugin = plugin.clone();
-                            tokio::spawn(async move {
-                                if let Err(e) = cloned_plugin
-                                    .send_custom_notification(
-                                        UTXO_SPENT_TAG.to_string(),
-                                        onchain_spend,
-                                    )
-                                    .await
-                                {
-                                    log::error!("Error sending custom notification: {:?}", e);
-                                }
-                            });
+                            acct = our_acct;
+                        } else {
+                            acct = ext_acct;
                         }
+                        let amount = po.value;
+                        let outpoint = format!("{}", input.previous_output.to_string());
+                        log::trace!("outpoint = {}", format!("{}", outpoint));
+                        let onchain_spend = json!({UTXO_SPENT_TAG: {
+                            "account": acct,
+                            "outpoint": outpoint,
+                            "spending_txid": tx.tx_node.txid.to_string(),
+                            "amount_msat": Self::sats_to_msats(amount),
+                            "coin_type": coin_type,
+                            "timestamp": format!("{}", a.confirmation_time),
+                            "blockheight": format!("{}", a.confirmation_height),
+                        }});
+                        log::trace!("INSIDE SEND SPEND NOTIFICATION ON SMAUG SIDE");
+                        let cloned_plugin = plugin.clone();
+                        tokio::spawn(async move {
+                            if let Err(e) = cloned_plugin
+                                .send_custom_notification(UTXO_SPENT_TAG.to_string(), onchain_spend)
+                                .await
+                            {
+                                log::error!("Error sending custom notification: {:?}", e);
+                            }
+                        });
+                        // }
                     }
                 }
             } else {
@@ -603,6 +607,7 @@ impl DescriptorWallet {
 
         // send deposit notification for every output, since all of them *might be* spends from our wallet.
         // store them in a temp account and let the user update later as needed.
+        // don't send transfer_from if output is_mine
         for (vout, output) in tx.tx_node.tx.output.iter().enumerate() {
             match tx.chain_position {
                 ChainPosition::Unconfirmed(_) => {
@@ -611,7 +616,7 @@ impl DescriptorWallet {
                 ChainPosition::Confirmed(a) => {
                     let acct: String;
                     let transfer_from: String;
-                    let our_acct = format!("smaug:{}:shared_outputs", self.get_name()?);
+                    let our_acct = format!("smaug:{}", self.get_name()?);
                     let ext_acct = "external".to_owned();
                     if wallet.is_mine(&output.script_pubkey) {
                         acct = our_acct;

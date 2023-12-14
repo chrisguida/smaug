@@ -32,22 +32,22 @@ def test_smaug(node_factory, bitcoind):
     # we start the test with 101 blocks, all of which have coinbases paying to our wallet
     # 100 of these coinbases are not mature, but the earliest one is
     wi_res = bitcoind.rpc.getwalletinfo()
-    bitcoind_wallet_bal = wi_res['balance'] + wi_res['immature_balance']
+    bitcoind_wallet_bal_btc = wi_res['balance'] + wi_res['immature_balance']
     pprint(bitcoind.rpc.getwalletinfo())
-    assert bitcoind_wallet_bal == 5050
+    assert bitcoind_wallet_bal_btc == 5050
 
-    addr = l1.rpc.newaddr()['bech32']
+    cln_addr = l1.rpc.newaddr()['bech32']
 
     cln_initial_amount = 1000000
     cln_initial_amount_msat = Millisatoshi(cln_initial_amount * 1000)
     # this subtracts 1M sat from our bitcoind wallet
-    bitcoind.rpc.sendtoaddress(addr, cln_initial_amount / 10**8)
+    bitcoind.rpc.sendtoaddress(cln_addr, cln_initial_amount / 10**8)
     # this adds 50 btc to our bitcoind wallet
     bitcoind.generate_block(1)
     wi_res = bitcoind.rpc.getwalletinfo()
-    bitcoind_wallet_bal = int(wi_res['balance'] * 10**8) + int(wi_res['immature_balance'] * 10**8)
+    bitcoind_wallet_bal_sat = int(wi_res['balance'] * 10**8) + int(wi_res['immature_balance'] * 10**8)
     pprint(bitcoind.rpc.getwalletinfo())
-    assert bitcoind_wallet_bal == 509999000000
+    assert bitcoind_wallet_bal_sat == 509999000000
 
     # wait for funds to show up in CLN
     wait_for(lambda: len(l1.rpc.listfunds()['outputs']) == 1)
@@ -86,11 +86,55 @@ def test_smaug(node_factory, bitcoind):
     assert bitcoind_smaug_balance['coin_type'] == 'bcrt'
     # print(bitcoind_smaug_balance['balance_msat'] + cln_initial_amount_msat)
     # print(int(bitcoind_wallet_bal * 10**3))
-    assert bitcoind_smaug_balance['balance_msat'] == int(bitcoind_wallet_bal * 10**3)
+    assert bitcoind_smaug_balance['balance_msat'] == int(bitcoind_wallet_bal_sat * 10**3)
 
-
+    ### already done
     # generate address
     # send funds to descriptor wallet address (received)
+    ### already done
+
+    # simple spend
+    # 1 input which is ours (send utxo_spent)
+    # 2 outputs:
+    #   1 which is the spend (to an external account) (send utxo_deposit from our account to external)
+    #   1 which is change (back to our wallet) (send utxo_deposit from our account back to our account)
+    unspent = bitcoind.rpc.listunspent()
+    txout = [i for i in unspent if i['amount'] == 50 and i['spendable']][0]
+    txout2 = [i for i in l1.rpc.listfunds()['outputs'] if i['status'] == 'confirmed' and not i['reserved']][0]
+    assert txout is not None
+    assert txout2 is not None
+    assert txout2['amount_msat'] == cln_initial_amount_msat
+    cln_addr = l1.rpc.newaddr()['bech32']
+    btc_addr = bitcoind.rpc.getnewaddress()
+    fee_amt = 1000
+    amt_btc_wallet = (cln_initial_amount - fee_amt) / 10 ** 8 + 48
+
+    raw_psbt = bitcoind.rpc.createpsbt([{"txid": txout["txid"], "vout": txout["vout"]}, {"txid": txout2["txid"], "vout": txout2["output"]}], [{cln_addr: "2"}, {btc_addr: amt_btc_wallet}])
+    assert only_one(l1.rpc.reserveinputs(raw_psbt)['reservations'])['reserved']
+    l1_signed_psbt = l1.rpc.signpsbt(raw_psbt, [1])['signed_psbt']
+    process_res = bitcoind.rpc.walletprocesspsbt(l1_signed_psbt)
+    assert process_res['complete']
+
+    txid = l1.rpc.sendpsbt(process_res['psbt'])['txid']
+
+    bitcoind.generate_block(1)
+
+    assert False
+    # simple receive
+    # n inputs (we ignore all of these because none are ours)
+    # n outputs, 1 of which is ours (send utxo_deposit from external account to our account)
+
+    # simple payjoin where we pay 1BTC
+    # 2 inputs
+    #   1 which is ours (2BTC) (send utxo_spent)
+    #   1 which is theirs (1BTC) (ignore)
+    # 2 outputs
+    #   1 which is ours (1BTC) (utxo_deposit from our wallet to our wallet (basically change))
+    #   1 which is theirs (2BTC) (utxo_deposit from our wallet to their wallet. problem is that we now have 3BTC worth of spends from our wallet in this tx but only 2BTC of inputs)
+
+    # create psbt from smaug wallet
+
+
     # catch bkpr log
     # find event in bkpr events
     # verify new balance
