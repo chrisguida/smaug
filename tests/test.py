@@ -57,8 +57,8 @@ def test_smaug(node_factory, bitcoind):
     assert btc_balance["balance_msat"] == cln_initial_amount_msat
 
     # get external/internal only_one(descriptors)
-    pprint(bitcoind.rpc.listdescriptors()["descriptors"])
     all_descriptors = bitcoind.rpc.listdescriptors()["descriptors"]
+    pprint(all_descriptors)
     wpkh_descriptors = list(
         filter(lambda x: x["desc"].startswith("wpkh"), all_descriptors)
     )
