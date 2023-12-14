@@ -80,10 +80,8 @@ def test_smaug(node_factory, bitcoind):
 
     bitcoind_smaug_balance = get_bkpr_smaug_balance(name, bkpr_balances)
     assert bitcoind_smaug_balance["coin_type"] == "bcrt"
-    assert (
-        bitcoind_smaug_balance["balance_msat"]
-        == get_bitcoind_wallet_bal_sats(bitcoind)_sat * 10**3
-    )
+    assert bitcoind_smaug_balance["balance_msat"] == get_bitcoind_wallet_bal_sats(bitcoind) * 10**3
+
     ### already done
     # generate second address
     addr2 = l1.rpc.newaddr()["bech32"]
