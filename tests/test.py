@@ -12,6 +12,7 @@ from conftest import SMAUG_PLUGIN
 from fixtures import *
 from pyln.client import Millisatoshi
 from pyln.testing.utils import BITCOIND_CONFIG, only_one, wait_for
+from utils import *
 
 
 # @pytest.mark.developer("Requires dev_sign_last_tx")
@@ -33,78 +34,62 @@ def test_smaug(node_factory, bitcoind):
 
     # we start the test with 101 blocks, all of which have coinbases paying to our wallet
     # 100 of these coinbases are not mature, but the earliest one is
-    wi_res = bitcoind.rpc.getwalletinfo()
-    bitcoind_wallet_bal_btc = wi_res["balance"] + wi_res["immature_balance"]
-    pprint(bitcoind.rpc.getwalletinfo())
-    assert bitcoind_wallet_bal_btc == 5050
+    assert get_bitcoind_wallet_bal_sats(bitcoind) == btc_to_sats(5050)
 
     cln_addr = l1.rpc.newaddr()["bech32"]
 
     cln_initial_amount = 1000000
-    cln_initial_amount_msat = Millisatoshi(cln_initial_amount * 1000)
+    cln_initial_amount_msat = Millisatoshi(cln_initial_amount * 10**3)
     # this subtracts 1M sat from our bitcoind wallet
-    bitcoind.rpc.sendtoaddress(cln_addr, cln_initial_amount / 10**8)
+    bitcoind.rpc.sendtoaddress(cln_addr, sats_to_btc(cln_initial_amount))
     # this adds 50 btc to our bitcoind wallet
     bitcoind.generate_block(1)
-    wi_res = bitcoind.rpc.getwalletinfo()
-    bitcoind_wallet_bal_sat = int(wi_res["balance"] * 10**8) + int(
-        wi_res["immature_balance"] * 10**8
-    )
-    pprint(bitcoind.rpc.getwalletinfo())
-    assert bitcoind_wallet_bal_sat == 509999000000
+    assert get_bitcoind_wallet_bal_sats(bitcoind) == 509999000000
 
     # wait for funds to show up in CLN
     wait_for(lambda: len(l1.rpc.listfunds()["outputs"]) == 1)
 
     balances = l1.rpc.bkpr_listbalances()
-    pprint(balances)
+    # pprint(balances)
 
     # verify pre-test CLN funds in bkpr
     btc_balance = only_one(only_one(balances["accounts"])["balances"])
     assert btc_balance["balance_msat"] == cln_initial_amount_msat
 
-    # get external/nternal only_one(descriptors)
+    # get external/internal only_one(descriptors)
     pprint(bitcoind.rpc.listdescriptors()["descriptors"])
     all_descriptors = bitcoind.rpc.listdescriptors()["descriptors"]
     wpkh_descriptors = list(
         filter(lambda x: x["desc"].startswith("wpkh"), all_descriptors)
     )
-    internal_descriptor = only_one(
-        list(filter(lambda x: x["internal"] is True, wpkh_descriptors))
-    )["desc"]
-    external_descriptor = only_one(
-        list(filter(lambda x: x["internal"] is False, wpkh_descriptors))
-    )["desc"]
+    internal_descriptor = get_descriptor(wpkh_descriptors, True)
+    external_descriptor = get_descriptor(wpkh_descriptors, False)
     print("internal_descriptor = %s " % internal_descriptor)
     print("external_descriptor = %s " % external_descriptor)
 
     # add wallet to smaug
     print("smaug ls result = %s" % l1.rpc.smaug("ls"))
     name = l1.rpc.smaug("add", external_descriptor, internal_descriptor)["name"]
-    print("name = %s" % name)
 
     # verify initial funds in wallet
     balances = l1.rpc.bkpr_listbalances()["accounts"]
     pprint(balances)
 
     # verify pre-test CLN funds in bkpr
-    cln_balance = only_one(
-        only_one(list(filter(lambda x: x["account"] == "wallet", balances)))["balances"]
-    )
+    cln_balance = get_cln_balance(balances)
     assert cln_balance["coin_type"] == "bcrt"
-    # print('smaug:{name}')
     assert cln_balance["balance_msat"] == cln_initial_amount_msat
-    bitcoind_smaug_balance = only_one(
-        only_one(list(filter(lambda x: x["account"] == "smaug:%s" % name, balances)))[
-            "balances"
-        ]
-    )
+
+    bitcoind_smaug_balance = get_bitcoind_smaug_balance(name, balances)
     assert bitcoind_smaug_balance["coin_type"] == "bcrt"
-    # print(bitcoind_smaug_balance['balance_msat'] + cln_initial_amount_msat)
-    # print(int(bitcoind_wallet_bal * 10**3))
-    assert bitcoind_smaug_balance["balance_msat"] == int(bitcoind_wallet_bal_sat * 10**3)
+    assert (
+        bitcoind_smaug_balance["balance_msat"]
+        == get_bitcoind_wallet_bal_sats(bitcoind)_sat * 10**3
+    )
     ### already done
-    # generate address
+    # generate second address
+    addr2 = l1.rpc.newaddr()["bech32"]
+
     # send funds to descriptor wallet address (received)
     ### already done
 
@@ -150,8 +135,39 @@ def test_smaug(node_factory, bitcoind):
     # create psbt from smaug wallet
 
 
+    cln_second_amount = 1234567
+    cln_second_amount_msat = Millisatoshi(cln_second_amount * 10**3)
+    bitcoind.rpc.sendtoaddress(addr2, sats_to_btc(cln_second_amount))
+    bitcoind.generate_block(1)
+    assert get_bitcoind_wallet_bal_sats(bitcoind) == 514997765433
+
+    # wait for new funds to show up in CLN
+    wait_for(lambda: len(l1.rpc.listfunds()["outputs"]) == 2)
+
+    balances = l1.rpc.bkpr_listbalances()["accounts"]
+
+    # verify CLN funds in bkpr
+    cln_balance = get_cln_balance(balances)
+    assert (
+        cln_balance["balance_msat"] == cln_initial_amount_msat + cln_second_amount_msat
+    )
+
+    wait_for(
+        lambda: get_bitcoind_smaug_balance(name, balances)["balance_msat"]
+        == get_bitcoind_wallet_bal_sats(bitcoind) * 10**3
+    )
+
+    bitcoind_smaug_balance = get_bitcoind_smaug_balance(name, balances)
+    assert (
+        bitcoind_smaug_balance["balance_msat"]
+        == get_bitcoind_wallet_bal_sats(bitcoind) * 10**3
+    )
+
     # catch bkpr log
     # find event in bkpr events
+    events = l1.rpc.bkpr_listaccountevents()["events"]
+
+    # pprint(events)
     # verify new balance
     # send funds back from smaug wallet to CLN wallet (sent)
     # catch bkpr log
