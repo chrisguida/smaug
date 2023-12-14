@@ -14,7 +14,7 @@ def get_bitcoind_wallet_bal_sats(bitcoind):
     return int(btc_to_sats(wi_res["balance"] + wi_res["immature_balance"]))
 
 
-def get_bitcoind_smaug_balance(name, bkpr_balances):
+def get_bkpr_smaug_balance(name, bkpr_balances):
     return only_one(
         only_one(
             list(filter(lambda x: x["account"] == "smaug:%s" % name, bkpr_balances))

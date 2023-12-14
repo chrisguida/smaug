@@ -78,7 +78,7 @@ def test_smaug(node_factory, bitcoind):
     assert cln_balance["coin_type"] == "bcrt"
     assert cln_balance["balance_msat"] == cln_initial_amount_msat
 
-    bitcoind_smaug_balance = get_bitcoind_smaug_balance(name, bkpr_balances)
+    bitcoind_smaug_balance = get_bkpr_smaug_balance(name, bkpr_balances)
     assert bitcoind_smaug_balance["coin_type"] == "bcrt"
     assert (
         bitcoind_smaug_balance["balance_msat"]
@@ -151,12 +151,20 @@ def test_smaug(node_factory, bitcoind):
     )
 
     wait_for(
-        lambda: get_bitcoind_smaug_balance(name, bkpr_balances)["balance_msat"]
+        lambda: get_bkpr_smaug_balance(name, bkpr_balances)["balance_msat"]
+        == get_bitcoind_wallet_bal_sats(bitcoind) * 10**3
+    )
+
+    assert (
+        get_bkpr_smaug_balance(name, bkpr_balances)["balance_msat"]
         == get_bitcoind_wallet_bal_sats(bitcoind) * 10**3
     )
 
     print("Done syncronizing smaug.")
     # catch bkpr log
+    # wait_for_log
+    # l1.daemon.wait_for_log(r"utxo_deposit \(deposit|nifty's secret stash\) .* -0msat 1679955976 111 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:0")
+
     # find event in bkpr events
     events = l1.rpc.bkpr_listaccountevents()["events"]
 
