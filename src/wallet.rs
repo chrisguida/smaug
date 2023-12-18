@@ -275,7 +275,7 @@ impl DescriptorWallet {
         )?)
     }
 
-    pub fn get_db_path(&self, db_dir: PathBuf) -> Result<String, Error> {
+    pub fn get_db_file_path(&self, db_dir: PathBuf) -> Result<String, Error> {
         Ok(format!("{}/{}.db", db_dir.display(), self.get_name()?))
     }
 

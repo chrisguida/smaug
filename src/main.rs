@@ -374,7 +374,7 @@ async fn add(plugin: Plugin<State>, args: AddArgs) -> Result<serde_json::Value, 
         .map_err(|e| anyhow!("Error calling listdatastore: {:?}", e))?;
     let name = &dw.get_name()?;
     let message = format!("Wallet with deterministic name {} successfully added", name);
-    let db_path = dw_clone.get_db_path(db_dir).unwrap();
+    let db_path = dw_clone.get_db_file_path(db_dir).unwrap();
     log::info!("{}", message);
     Ok(json!({"name": name, "message": message, "db_path": db_path}))
 }
@@ -417,7 +417,7 @@ async fn delete(
     let _removed_item: Option<DescriptorWallet>;
     if wallets.contains_key(&descriptor_name) {
         let removed_item = wallets.remove(&descriptor_name);
-        let db_path = removed_item.unwrap().get_db_path(db_dir).unwrap();
+        let db_path = removed_item.unwrap().get_db_file_path(db_dir).unwrap();
         fs::remove_file(db_path.clone())?;
         log::debug!("Deleted smaug db file at {}", db_path);
         let rpc_file = plugin.configuration().rpc_file;
