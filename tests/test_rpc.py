@@ -5,7 +5,7 @@ from fixtures import *
 from pyln.client import Millisatoshi
 from pyln.testing.utils import BITCOIND_CONFIG, only_one, wait_for
 from utils import *
-
+import os
 def test_rpc_remove(node_factory, bitcoind):
     """
     Test RPC remove.
@@ -27,11 +27,13 @@ def test_rpc_remove(node_factory, bitcoind):
     external_descriptor = get_only_one_descriptor(bitcoind, "wpkh", False)
 
     # add wallet to smaug
-    wallet_name = l1.rpc.smaug("add", external_descriptor, internal_descriptor)["name"]
-
+    wallet = l1.rpc.smaug("add", external_descriptor, internal_descriptor)
+    wallet_name = wallet["name"]
+    db_path = wallet["db_path"]
     smaug_wallets = l1.rpc.smaug("ls")
     assert len(smaug_wallets) == 1
     assert wallet_name in smaug_wallets
+    assert os.path.isfile(db_path)
 
     # remove wallet from smaug
     result = l1.rpc.smaug("remove", wallet_name)
@@ -39,5 +41,4 @@ def test_rpc_remove(node_factory, bitcoind):
     smaug_wallets = l1.rpc.smaug("ls")
     assert len(smaug_wallets) == 0
     assert result == f"Deleted wallet: {wallet_name}"
-
-    # TODO  make sure bdk cache is deleted when we delete a wallet
+    assert not os.path.isfile(db_path)

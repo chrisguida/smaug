@@ -330,7 +330,7 @@ async fn add(plugin: Plugin<State>, args: AddArgs) -> Result<serde_json::Value, 
     };
     let mut dw_clone = dw.clone();
     let wallet = dw_clone
-        .fetch_wallet(db_dir, brpc_host, brpc_port, brpc_auth)
+        .fetch_wallet(db_dir.clone(), brpc_host, brpc_port, brpc_auth)
         .await?;
     let bdk_transactions_iter = wallet.transactions();
     let mut transactions = Vec::<CanonicalTx<'_, Transaction, ConfirmationTimeAnchor>>::new();
@@ -374,8 +374,9 @@ async fn add(plugin: Plugin<State>, args: AddArgs) -> Result<serde_json::Value, 
         .map_err(|e| anyhow!("Error calling listdatastore: {:?}", e))?;
     let name = &dw.get_name()?;
     let message = format!("Wallet with deterministic name {} successfully added", name);
+    let db_path = format!("{}/{}.db", db_dir.display(), name);
     log::info!("{}", message);
-    Ok(json!({"name": name, "message": message}))
+    Ok(json!({"name": name, "message": message, "db_path": db_path}))
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -411,10 +412,14 @@ async fn delete(
     plugin: Plugin<State>,
     descriptor_name: String,
 ) -> Result<serde_json::Value, Error> {
+    let db_dir = plugin.state().lock().await.db_dir.clone();
     let wallets = &mut plugin.state().lock().await.wallets;
     let _removed_item: Option<DescriptorWallet>;
     if wallets.contains_key(&descriptor_name) {
         _removed_item = wallets.remove(&descriptor_name);
+        // TODO only remove db file
+        // log::debug!("xxxxxxxxxxxxxxxxxxxxxxx -> {:?}", _removed_item);
+        fs::remove_dir_all(db_dir)?;
         let rpc_file = plugin.configuration().rpc_file;
         let p = Path::new(&rpc_file);
 
