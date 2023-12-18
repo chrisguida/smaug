@@ -374,7 +374,7 @@ async fn add(plugin: Plugin<State>, args: AddArgs) -> Result<serde_json::Value, 
         .map_err(|e| anyhow!("Error calling listdatastore: {:?}", e))?;
     let name = &dw.get_name()?;
     let message = format!("Wallet with deterministic name {} successfully added", name);
-    let db_path = format!("{}/{}.db", db_dir.display(), name);
+    let db_path = dw_clone.get_db_path(db_dir).unwrap();
     log::info!("{}", message);
     Ok(json!({"name": name, "message": message, "db_path": db_path}))
 }
