@@ -417,9 +417,10 @@ async fn delete(
     let _removed_item: Option<DescriptorWallet>;
     if wallets.contains_key(&descriptor_name) {
         _removed_item = wallets.remove(&descriptor_name);
-        // TODO only remove db file
-        // log::debug!("xxxxxxxxxxxxxxxxxxxxxxx -> {:?}", _removed_item);
-        fs::remove_dir_all(db_dir)?;
+        let wallet_name = _removed_item.unwrap().get_name();
+        let db_path = format!("{}/{}.db", db_dir.display(), wallet_name.unwrap());
+        log::debug!("Deleting smaug db file at {}", db_path);
+        fs::remove_file(db_path)?;
         let rpc_file = plugin.configuration().rpc_file;
         let p = Path::new(&rpc_file);
 
