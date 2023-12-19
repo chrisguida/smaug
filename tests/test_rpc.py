@@ -29,11 +29,11 @@ def test_rpc_remove(node_factory, bitcoind):
     # add wallet to smaug
     wallet = l1.rpc.smaug("add", external_descriptor, internal_descriptor)
     wallet_name = wallet["name"]
-    db_path = wallet["db_path"]
+    db_file_path = f"{str(l1.lightning_dir)}/regtest/.smaug/{wallet_name}.db"
     smaug_wallets = l1.rpc.smaug("ls")
     assert len(smaug_wallets) == 1
     assert wallet_name in smaug_wallets
-    assert os.path.isfile(db_path)
+    assert os.path.isfile(db_file_path)
 
     # remove wallet from smaug
     result = l1.rpc.smaug("remove", wallet_name)
@@ -41,7 +41,7 @@ def test_rpc_remove(node_factory, bitcoind):
     smaug_wallets = l1.rpc.smaug("ls")
     assert len(smaug_wallets) == 0
     assert result == f"Deleted wallet: {wallet_name}"
-    assert not os.path.isfile(db_path)
+    assert not os.path.isfile(db_file_path)
 
 
 def test_rpc_list(node_factory, bitcoind):
