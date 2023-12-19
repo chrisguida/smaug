@@ -82,3 +82,8 @@ def test_rpc_list(node_factory, bitcoind):
     wallet2_cd = smaug_wallets[wallet2_name]["change_descriptor"]
     assert wallet1_cd.startswith("wpkh(")
     assert wallet2_cd.startswith("tr(")
+
+    wallet1_d = smaug_wallets[wallet1_name]["descriptor"]
+    wallet2_d = smaug_wallets[wallet2_name]["descriptor"]
+    assert wallet1_d.startswith("wpkh(")
+    assert wallet2_d.startswith("tr(")
