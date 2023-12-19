@@ -330,7 +330,7 @@ async fn add(plugin: Plugin<State>, args: AddArgs) -> Result<serde_json::Value, 
     };
     let mut dw_clone = dw.clone();
     let wallet = dw_clone
-        .fetch_wallet(db_dir.clone(), brpc_host, brpc_port, brpc_auth)
+        .fetch_wallet(db_dir, brpc_host, brpc_port, brpc_auth)
         .await?;
     let bdk_transactions_iter = wallet.transactions();
     let mut transactions = Vec::<CanonicalTx<'_, Transaction, ConfirmationTimeAnchor>>::new();
@@ -374,9 +374,8 @@ async fn add(plugin: Plugin<State>, args: AddArgs) -> Result<serde_json::Value, 
         .map_err(|e| anyhow!("Error calling listdatastore: {:?}", e))?;
     let name = &dw.get_name()?;
     let message = format!("Wallet with deterministic name {} successfully added", name);
-    let db_path = dw_clone.get_db_file_path(db_dir).unwrap();
     log::info!("{}", message);
-    Ok(json!({"name": name, "message": message, "db_path": db_path}))
+    Ok(json!({"name": name, "message": message}))
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
