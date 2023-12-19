@@ -411,10 +411,14 @@ async fn delete(
     plugin: Plugin<State>,
     descriptor_name: String,
 ) -> Result<serde_json::Value, Error> {
+    let db_dir = plugin.state().lock().await.db_dir.clone();
     let wallets = &mut plugin.state().lock().await.wallets;
     let _removed_item: Option<DescriptorWallet>;
     if wallets.contains_key(&descriptor_name) {
-        _removed_item = wallets.remove(&descriptor_name);
+        let removed_item = wallets.remove(&descriptor_name);
+        let db_path = removed_item.unwrap().get_db_file_path(db_dir).unwrap();
+        fs::remove_file(db_path.clone())?;
+        log::debug!("Deleted smaug db file at {}", db_path);
         let rpc_file = plugin.configuration().rpc_file;
         let p = Path::new(&rpc_file);
 

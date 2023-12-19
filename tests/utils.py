@@ -33,6 +33,15 @@ def get_descriptor(wpkh_descriptors, internal):
         list(filter(lambda x: x["internal"] is internal, wpkh_descriptors))
     )["desc"]
 
+
+def get_only_one_descriptor(bitcoind, script_type, internal):
+    all_descriptors = bitcoind.rpc.listdescriptors()["descriptors"]
+    descriptors = list(
+        filter(lambda x: x["desc"].startswith(script_type), all_descriptors)
+    )
+    return get_descriptor(descriptors, internal)
+
+
 def switch_wallet(bitcoind, wallet_name):
     current_wallets = bitcoind.rpc.listwallets()
     if wallet_name not in current_wallets:
