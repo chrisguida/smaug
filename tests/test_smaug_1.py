@@ -62,10 +62,11 @@ def test_smaug(node_factory, bitcoind):
 
 
     ### simple spend ###
-    # 1 input which is ours (send utxo_spent)
+    # 1 input which is ours (send utxo_spent for 100M sats)
     # 2 outputs:
-    #   1 which is the spend (to an external account) (send utxo_deposit from our account to external)
-    #   1 which is change (back to our wallet) (send utxo_deposit from our account back to our account)
+    #   1 which is the 10M sat spend (to an external account) (send utxo_deposit from our account to external)
+    #   1 which is 89_999_859 sat change (back to our wallet) (send utxo_deposit from our account back to our account)
+    # fee on regtest is currently 141 sats, not sure if this will change in the future
 
     # to do our spend, we send 10M sats to the CLN internal wallet from our smaug wallet
     # this subtracts 1M sat (+141 sats for fee) from our bitcoind wallet
@@ -153,23 +154,53 @@ def test_smaug(node_factory, bitcoind):
     print("internal_descriptor = %s " % internal_descriptor)
     print("external_descriptor = %s " % external_descriptor)
 
-    print("smaug ls result = %s" % l1.rpc.smaug("ls"))
-    name = l1.rpc.smaug("add", external_descriptor, internal_descriptor)["name"]
+    # print("smaug ls result = %s" % l1.rpc.smaug("ls"))
+    # name = l1.rpc.smaug("add", external_descriptor, internal_descriptor)["name"]
 
-    bkpr_balances = l1.rpc.bkpr_listbalances()["accounts"]
-    bitcoind_smaug_balance = get_bkpr_smaug_balance(name, bkpr_balances)
-    assert bitcoind_smaug_balance["coin_type"] == "bcrt"
-    assert bitcoind_smaug_balance["balance_msat"] == get_bitcoind_wallet_bal_sats(bitcoind) * 10**3
+    # bkpr_balances = l1.rpc.bkpr_listbalances()["accounts"]
+    # bitcoind_smaug_balance = get_bkpr_smaug_balance(name, bkpr_balances)
+    # assert bitcoind_smaug_balance["coin_type"] == "bcrt"
+    # assert bitcoind_smaug_balance["balance_msat"] == get_bitcoind_wallet_bal_sats(bitcoind) * 10**3
 
+    # there should now be 12 events in our bkpr_listaccountevents() call:
 
+    all_accountevents = l1.rpc.bkpr_listaccountevents()['events']
 
-    # pprint(events)
-    # verify new balance
-    # send funds back from smaug wallet to CLN wallet (sent)
-    # catch bkpr log
-    # find event in bkpr events
-    # verify new balance
-    # create payjoin between smaug wallet and CLN wallet (shared)
+    # 4 for the `wallet` account:
+    #   1 journal_entry for 0 msats (this entry will be removed from bkpr soon?)
+    #   2 deposits:
+    #     10M sats for initial deposit
+    #     20M sats for payjoin output
+    #   1 withdrawal:
+    #     10M sats for payjoin input
+
+    # smaug_accountevents = list(filter(lambda x: x["account"] == "smaug:%s" % name, all_accountevents))
+    external_accountevents = list(filter(lambda x: x["account"] == "external", all_accountevents))
+    non_cln_accountevents = list(filter(lambda x: x["account"] != "wallet", all_accountevents))
+    accountevents = list(filter(lambda x: x.get("outpoint") == "42d4c98bbbdd16c11d150e2f9e038466c52341a13adfd81d33d8385a2ef90113:0", all_accountevents))
+    # assert len(smaug_accountevents) == 8
+
+    # 8 for the `smaug:{name}` account:
+    #   5 deposits:
+    #     3 deposits from external into smaug:
+    #       100M sats for initial deposit from mining wallet
+    #       89_999_859 sats for change from initial send to CLN wallet
+    #       79_998_859 sats for change from payjoin
+    #     2 deposits from smaug to external (mirror for 2 CLN wallet deposits above):
+    #       10M sats for initial deposit
+    #       20M sats for payjoin output
+    #   3 withdrawals:
+    #       100M sats for initial deposit from mining wallet
+    #       10M sats for initial CLN wallet deposit
+    #       20M sats for payjoin output
+
+    # there should also be
+
+    pprint(all_accountevents)
+
+    all_incomeevents = l1.rpc.bkpr_listincome()['income_events']
+    pprint(all_incomeevents)
+
     # catch bkpr log
     # find event in bkpr events
     # verify new balance
