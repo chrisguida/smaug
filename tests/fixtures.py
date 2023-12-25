@@ -74,3 +74,17 @@ def bitcoind(directory, teardown_checks):
     except Exception:
         bitcoind.proc.kill()
     bitcoind.proc.wait()
+
+
+@pytest.fixture
+def ln_node(node_factory):
+    yield node_factory.get_nodes(
+        1,
+        opts={
+            "allow_broken_log": True,
+            "plugin": SMAUG_PLUGIN,
+            "smaug_brpc_user": BITCOIND_CONFIG["rpcuser"],
+            "smaug_brpc_pass": BITCOIND_CONFIG["rpcpassword"],
+            "smaug_brpc_port": BITCOIND_CONFIG["rpcport"],
+        },
+    )[0]
