@@ -2,7 +2,7 @@ from conftest import SMAUG_PLUGIN
 from fixtures import *
 from pyln.client import Millisatoshi
 from pyln.testing.utils import BITCOIND_CONFIG, only_one, wait_for
-from utils import *
+from utils import get_only_one_descriptor
 
 
 def test_rpc_add(bitcoind, ln_node):
