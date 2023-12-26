@@ -1,8 +1,10 @@
+import re
+
 from conftest import SMAUG_PLUGIN
 from fixtures import *
 from pyln.client import Millisatoshi
 from pyln.testing.utils import BITCOIND_CONFIG, only_one, wait_for
-from utils import get_only_one_descriptor
+from utils import get_bkpr_smaug_balance, get_only_one_descriptor
 
 
 def test_rpc_add(bitcoind, ln_node):
@@ -81,14 +83,50 @@ def test_rpc_list(bitcoind, ln_node):
     smaug_wallet_1 = smaug_wallets[wallet1_name]
     smaug_wallet_2 = smaug_wallets[wallet2_name]
 
-    assert smaug_wallet_1["change_descriptor"].startswith("wpkh(")
-    assert smaug_wallet_1["descriptor"].startswith("wpkh(")
+    asserted_keys = [
+        "balance",
+        "birthday",
+        "change_descriptor",
+        "descriptor",
+        "gap",
+        "network",
+    ]
+    assert (
+        sorted(list(smaug_wallet_1.keys()))
+        == sorted(list(smaug_wallet_2.keys()))
+        == asserted_keys
+    )
+
+    regex_ns_d = (
+        r"^wpkh\(\[[a-f0-9]{8}\/84'\/1'\/0'\]tpub[a-zA-Z0-9]{107}\/0\/\*\)#[a-z0-9]{8}$"
+    )
+    regex_ns_cd = (
+        r"^wpkh\(\[[a-f0-9]{8}\/84'\/1'\/0'\]tpub[a-zA-Z0-9]{107}\/1\/\*\)#[a-z0-9]{8}$"
+    )
+    regex_tr_d = (
+        r"^tr\(\[[a-f0-9]{8}\/86'\/1'\/0'\]tpub[a-zA-Z0-9]{107}\/0\/\*\)#[a-z0-9]{8}$"
+    )
+    regex_tr_cd = (
+        r"^tr\(\[[a-f0-9]{8}\/86'\/1'\/0'\]tpub[a-zA-Z0-9]{107}\/1\/\*\)#[a-z0-9]{8}$"
+    )
+    assert re.search(regex_ns_d, smaug_wallet_1["descriptor"]) is not None
+    assert re.search(regex_ns_cd, smaug_wallet_1["change_descriptor"]) is not None
     assert smaug_wallet_1["birthday"] == 821000
     assert smaug_wallet_1["gap"] == 5000
-    assert smaug_wallet_2["change_descriptor"].startswith("tr(")
-    assert smaug_wallet_2["descriptor"].startswith("tr(")
+    assert re.search(regex_tr_d, smaug_wallet_2["descriptor"]) is not None
+    assert re.search(regex_tr_cd, smaug_wallet_2["change_descriptor"]) is not None
     assert smaug_wallet_2["birthday"] == 821001
     assert smaug_wallet_2["gap"] == 5001
+
+    # Verify balances
+    asserted_balance = 505000000000
+    assert smaug_wallet_1["balance"] == asserted_balance
+    assert smaug_wallet_2["balance"] == 0
+
+    # Additionally verify balance against bookkeeper
+    bkpr_balances = ln_node.rpc.bkpr_listbalances()["accounts"]
+    bitcoind_smaug_balance = get_bkpr_smaug_balance(wallet1_name, bkpr_balances)
+    assert bitcoind_smaug_balance["balance_msat"] / 1000 == asserted_balance
 
 
 def test_rpc_remove(bitcoind, ln_node):
