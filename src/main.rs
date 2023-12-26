@@ -382,6 +382,7 @@ async fn add(plugin: Plugin<State>, args: AddArgs) -> Result<serde_json::Value, 
 struct ListResponseItem {
     pub descriptor: String,
     pub change_descriptor: Option<String>,
+    pub balance: Option<u64>,
     pub birthday: Option<u32>,
     pub gap: Option<u32>,
     pub network: Option<String>,
@@ -392,12 +393,32 @@ async fn list(plugin: Plugin<State>) -> Result<serde_json::Value, Error> {
 
     let wallets = state.wallets.clone();
     let mut result = BTreeMap::<String, ListResponseItem>::new();
+    let (db_dir, brpc_host, brpc_port, brpc_auth) = {
+        (
+            state.db_dir.clone(),
+            state.brpc_host.clone(),
+            state.brpc_port.clone(),
+            state.brpc_auth.clone(),
+        )
+    };
+
     for (wallet_name, wallet) in wallets {
+        let mut dw_clone = wallet.clone();
+        let bdk_wallet = dw_clone
+            .fetch_wallet(
+                db_dir.clone(),
+                brpc_host.clone(),
+                brpc_port.clone(),
+                brpc_auth.clone(),
+            )
+            .await?;
+
         result.insert(
             wallet_name.clone(),
             ListResponseItem {
                 descriptor: wallet.descriptor.clone(),
                 change_descriptor: wallet.change_descriptor.clone(),
+                balance: Some(bdk_wallet.get_balance().total()),
                 birthday: wallet.birthday.clone(),
                 gap: wallet.gap.clone(),
                 network: wallet.network.clone(),
