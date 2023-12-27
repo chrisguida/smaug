@@ -37,6 +37,9 @@ jobs:
     #    # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
     #    flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Install bitcoind
+      env:
+        BITCOIN_VERSION: "25.1"
+        ELEMENTS_VERSION: 22.0.2
       run: .github/scripts/install-bitcoind.sh
     - name: Run pyln-testing tests
       run: |
