@@ -25,7 +25,7 @@ jobs:
         python-version: "3.11"
     - name: Install dependencies
       run: |
-        cd tests
+        working-directory: tests
         python -m pip install --upgrade pip
         pip install poetry
         poetry install 
@@ -38,4 +38,5 @@ jobs:
     #    flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest
       run: |
+        working-directory: tests
         poetry run pytest test_rpc.py
