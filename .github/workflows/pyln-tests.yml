@@ -5,7 +5,7 @@ name: Python application
 
 on:
   push:
-    branches: [ "add-pyln-testing-ci-workflow" ]
+    branches: [ "add-pyln-tests-ci-workflow" ]
   pull_request:
     branches: [ "master" ]
 
