@@ -38,4 +38,4 @@ jobs:
     #    flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Run pyln-testing tests
       run: |
-        poetry run -C tests pytest test_rpc.py
+        poetry run -C tests pytest tests/test_rpc.py
