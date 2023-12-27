@@ -38,9 +38,18 @@ jobs:
     #    flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Install bitcoind
       env:
-        BITCOIN_VERSION: "25.1"
+        BITCOIN_VERSION: 25.1
         ELEMENTS_VERSION: 22.0.2
       run: .github/scripts/install-bitcoind.sh
+
+    - name: Download CLN build
+      uses: actions/download-artifact@v3
+      with:
+        name: cln-compile-gcc.tar.bz2
+
+    - name: Unpack CLN build
+      run: tar -xvjf cln-compile-gcc.tar.bz2
+
     - name: Run pyln-testing tests
       run: |
         poetry run -C tests pytest tests/test_rpc.py
