@@ -275,13 +275,16 @@ impl DescriptorWallet {
         )?)
     }
 
+    pub fn get_db_file_path(&self, db_dir: PathBuf) -> Result<String, Error> {
+        Ok(format!("{}/{}.db", db_dir.display(), self.get_name()?))
+    }
+
     pub async fn fetch_wallet<'a>(
         &mut self,
         db_dir: PathBuf,
         brpc_host: String,
         brpc_port: u16,
-        brpc_user: String,
-        brpc_pass: String,
+        brpc_auth: Auth,
     ) -> Result<Wallet<Store<'_, bdk::wallet::ChangeSet>>, Error> {
         log::trace!("creating path");
         let db_filename = self.get_name()?;
@@ -305,9 +308,16 @@ impl DescriptorWallet {
         log::trace!("Syncing...");
         log::debug!("using network: {}", json!(self.network).as_str().unwrap());
 
+        log::trace!("using auth = {:?}", brpc_auth);
+        log::trace!(
+            "using url = {}",
+            format!("http://{}:{}", brpc_host.clone(), brpc_port.clone())
+        );
+
         let rpc_client = Client::new_with_timeout(
             &format!("http://{}:{}", brpc_host.clone(), brpc_port.clone()),
-            Auth::UserPass(brpc_user.clone(), brpc_pass.clone()), // Auth::CookieFile(PathBuf::from("/home/cguida/.bitcoin/regtest/.cookie"))
+            brpc_auth,
+            // Auth::UserPass(brpc_user.clone(), brpc_pass.clone()), // Auth::CookieFile(PathBuf::from("/home/cguida/.bitcoin/regtest/.cookie"))
             Duration::from_secs(3600),
         )?;
 
@@ -356,7 +366,15 @@ impl DescriptorWallet {
 
         for bh in res.relevant_blocks {
             let block = rpc_client.get_block(&bh)?;
-            let height: u32 = block.bip34_block_height()?.try_into().unwrap();
+            // let height: u32 = block.bip34_block_height()?.try_into().unwrap();
+            // we really should not have to make two separate RPC calls here.
+            // unfortunately rust-bitcoin does not expose an rpc method that returns
+            // both the full transaction dump and the height.
+            let height: u32 = rpc_client
+                .get_block_header_info(&bh)?
+                .height
+                .try_into()
+                .unwrap();
             if let Some(p) = prev_block_id {
                 if height <= p.height {
                     if let Some((height, hash)) =
@@ -436,12 +454,13 @@ impl DescriptorWallet {
                 }
                 ChainPosition::Confirmed(a) => {
                     let acct: String;
-                    let transfer_from: String;
+                    // all outputs are being transferred from our wallet
+                    let transfer_from = format!("smaug:{}", self.get_name()?);
                     if wallet.is_mine(&output.script_pubkey) {
-                        acct = format!("smaug:{}", self.get_name()?);
-                        transfer_from = "external".to_owned();
+                        // this is a deposit from ourselves to ourselves, ie change
+                        acct = transfer_from.clone();
                     } else {
-                        transfer_from = format!("smaug:{}", self.get_name()?);
+                        // this is a deposit from ourselves to an external wallet
                         acct = "external".to_owned();
                     }
                     let amount = output.value;
@@ -552,34 +571,37 @@ impl DescriptorWallet {
                         continue;
                     }
                     ChainPosition::Confirmed(a) => {
+                        let our_acct = format!("smaug:{}", self.get_name()?);
+                        let ext_acct = "external".to_owned();
+                        let acct: String;
                         if wallet.is_mine(&po.script_pubkey) {
-                            let acct = format!("smaug:{}", self.get_name()?);
-                            let amount = po.value;
-                            let outpoint = format!("{}", input.previous_output.to_string());
-                            log::trace!("outpoint = {}", format!("{}", outpoint));
-                            let onchain_spend = json!({UTXO_SPENT_TAG: {
-                                "account": acct,
-                                "outpoint": outpoint,
-                                "spending_txid": tx.tx_node.txid.to_string(),
-                                "amount_msat": Self::sats_to_msats(amount),
-                                "coin_type": coin_type,
-                                "timestamp": format!("{}", a.confirmation_time),
-                                "blockheight": format!("{}", a.confirmation_height),
-                            }});
-                            log::trace!("INSIDE SEND SPEND NOTIFICATION ON SMAUG SIDE");
-                            let cloned_plugin = plugin.clone();
-                            tokio::spawn(async move {
-                                if let Err(e) = cloned_plugin
-                                    .send_custom_notification(
-                                        UTXO_SPENT_TAG.to_string(),
-                                        onchain_spend,
-                                    )
-                                    .await
-                                {
-                                    log::error!("Error sending custom notification: {:?}", e);
-                                }
-                            });
+                            acct = our_acct;
+                        } else {
+                            acct = ext_acct;
                         }
+                        let amount = po.value;
+                        let outpoint = format!("{}", input.previous_output.to_string());
+                        log::trace!("outpoint = {}", format!("{}", outpoint));
+                        let onchain_spend = json!({UTXO_SPENT_TAG: {
+                            "account": acct,
+                            "outpoint": outpoint,
+                            "spending_txid": tx.tx_node.txid.to_string(),
+                            "amount_msat": Self::sats_to_msats(amount),
+                            "coin_type": coin_type,
+                            "timestamp": format!("{}", a.confirmation_time),
+                            "blockheight": format!("{}", a.confirmation_height),
+                        }});
+                        log::trace!("INSIDE SEND SPEND NOTIFICATION ON SMAUG SIDE");
+                        let cloned_plugin = plugin.clone();
+                        tokio::spawn(async move {
+                            if let Err(e) = cloned_plugin
+                                .send_custom_notification(UTXO_SPENT_TAG.to_string(), onchain_spend)
+                                .await
+                            {
+                                log::error!("Error sending custom notification: {:?}", e);
+                            }
+                        });
+                        // }
                     }
                 }
             } else {
@@ -589,6 +611,7 @@ impl DescriptorWallet {
 
         // send deposit notification for every output, since all of them *might be* spends from our wallet.
         // store them in a temp account and let the user update later as needed.
+        // don't send transfer_from if output is_mine
         for (vout, output) in tx.tx_node.tx.output.iter().enumerate() {
             match tx.chain_position {
                 ChainPosition::Unconfirmed(_) => {
@@ -597,7 +620,7 @@ impl DescriptorWallet {
                 ChainPosition::Confirmed(a) => {
                     let acct: String;
                     let transfer_from: String;
-                    let our_acct = format!("smaug:{}:shared_outputs", self.get_name()?);
+                    let our_acct = format!("smaug:{}", self.get_name()?);
                     let ext_acct = "external".to_owned();
                     if wallet.is_mine(&output.script_pubkey) {
                         acct = our_acct;

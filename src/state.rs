@@ -1,6 +1,7 @@
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 use bdk::bitcoin;
+use bitcoincore_rpc::Auth;
 use tokio::sync::Mutex;
 
 use crate::wallet::DescriptorWallet;
@@ -17,10 +18,11 @@ pub struct Smaug {
     pub brpc_host: String,
     /// Bitcoind RPC port
     pub brpc_port: u16,
-    /// Bitcoind RPC user
-    pub brpc_user: String,
-    /// Bitcoind RPC password
-    pub brpc_pass: String,
+    // /// Bitcoind RPC user
+    // pub brpc_user: String,
+    // /// Bitcoind RPC password
+    // pub brpc_pass: String,
+    pub brpc_auth: Auth,
     /// The db path relevant to our wallets
     pub db_dir: PathBuf,
 }
@@ -32,8 +34,7 @@ impl Smaug {
             network: bitcoin::Network::Bitcoin.to_string(),
             brpc_host: String::from("127.0.0.1"),
             brpc_port: 8332,
-            brpc_user: String::from("bitcoin"),
-            brpc_pass: String::from("password"),
+            brpc_auth: Auth::None,
             db_dir: PathBuf::new(),
         }
     }

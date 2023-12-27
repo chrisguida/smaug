@@ -6,6 +6,7 @@ extern crate serde_json;
 
 use bdk::chain::tx_graph::CanonicalTx;
 use bdk::chain::ConfirmationTimeAnchor;
+use bitcoincore_rpc::Auth;
 use clap::error::ErrorKind;
 use clap::{CommandFactory, Parser, Subcommand};
 use cln_rpc::model::DatastoreMode;
@@ -13,6 +14,7 @@ use cln_rpc::{
     model::requests::{DatastoreRequest, ListdatastoreRequest},
     ClnRpc, Request, Response,
 };
+use home::home_dir;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -33,6 +35,12 @@ use smaug::state::{Smaug, State};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    // std::env::set_var("CLN_PLUGIN_LOG", "cln_plugin=info,cln_rpc=info,debug");
+    eprintln!("STARTING SMAUG");
+    eprintln!(
+        "log set to {}",
+        std::env::var("CLN_PLUGIN_LOG").unwrap_or_default()
+    );
     let builder = Builder::new(tokio::io::stdin(), tokio::io::stdout())
         .option(options::ConfigOption::new(
             "smaug_network",
@@ -46,18 +54,23 @@ async fn main() -> Result<(), anyhow::Error> {
         ))
         .option(options::ConfigOption::new(
             "smaug_brpc_port",
-            options::Value::Integer(8332),
-            "Bitcoind RPC port (default 8332)",
+            options::Value::OptInteger,
+            "Bitcoind RPC port",
         ))
         .option(options::ConfigOption::new(
             "smaug_brpc_user",
             options::Value::OptString,
-            "Bitcoind RPC user (Required)",
+            "Bitcoind RPC user (Required if cookie file unavailable)",
         ))
         .option(options::ConfigOption::new(
             "smaug_brpc_pass",
             options::Value::OptString,
-            "Bitcoind RPC password (Required)",
+            "Bitcoind RPC password (Required if cookie file unavailable)",
+        ))
+        .option(options::ConfigOption::new(
+            "smaug_brpc_cookie_dir",
+            options::Value::OptString,
+            "Bitcoind data directory (for cookie file access)",
         ))
         .notification(messages::NotificationTopic::new(UTXO_DEPOSIT_TAG))
         .notification(messages::NotificationTopic::new(UTXO_SPENT_TAG))
@@ -84,7 +97,7 @@ async fn main() -> Result<(), anyhow::Error> {
     );
     let network = match configured_plugin.option("smaug_network") {
         Some(smaug_network) => match smaug_network.as_str() {
-            Some(wdn) => wdn.to_owned(),
+            Some(sn) => sn.to_owned(),
             None => configured_plugin.configuration().network,
         },
         None => configured_plugin.configuration().network,
@@ -103,36 +116,51 @@ async fn main() -> Result<(), anyhow::Error> {
     let brpc_port: u16 = match configured_plugin.option("smaug_brpc_port") {
         Some(smaug_brpc_port) => match smaug_brpc_port.as_i64() {
             Some(sbp) => u16::try_from(sbp)?,
-            None => {
-                return Err(anyhow!(
-                    "must specify smaug_brpc_port (your bitcoind instance rpcport)"
-                ))
-            }
+            None => match network.as_str() {
+                "regtest" => 18443,
+                _ => 8332,
+            },
         },
-        None => return Err(anyhow!("must specify smaug_brpc_port")),
+        None => match network.as_str() {
+            "regtest" => 18443,
+            _ => 8332,
+        },
     };
-    let brpc_user = match configured_plugin.option("smaug_brpc_user") {
-        Some(smaug_brpc_user) => match smaug_brpc_user.as_str() {
-            Some(wdn) => wdn.to_owned(),
-            None => return Err(anyhow!("must specify smaug_brpc_user")),
-        },
-        None => {
-            return Err(anyhow!(
-                "must specify smaug_brpc_user (your bitcoind instance rpcuser)"
-            ))
+    let mut brpc_auth: Auth = Auth::None;
+    if let Some(bu_val) = configured_plugin.option("smaug_brpc_user") {
+        if let Some(sbu) = bu_val.as_str() {
+            if let Some(bs_val) = configured_plugin.option("smaug_brpc_pass") {
+                if let Some(sbp) = bs_val.as_str() {
+                    brpc_auth = Auth::UserPass(sbu.to_owned(), sbp.to_owned());
+                }
+            }
+            if let Auth::None = brpc_auth {
+                return Err(anyhow!(
+                    "specified `smaug_brpc_user` but did not specify `smaug_brpc_pass`"
+                ));
+            }
         }
-    };
-    let brpc_pass = match configured_plugin.option("smaug_brpc_pass") {
-        Some(smaug_brpc_pass) => match smaug_brpc_pass.as_str() {
-            Some(wdn) => wdn.to_owned(),
-            None => {
-                return Err(anyhow!(
-                    "must specify smaug_brpc_pass (your bitcoind instance rpcpassword)"
-                ))
+    }
+    if let Auth::None = brpc_auth {
+        if let Some(smaug_brpc_cookie_dir) = configured_plugin.option("smaug_brpc_cookie_dir") {
+            if let Some(sbcd) = smaug_brpc_cookie_dir.as_str() {
+                brpc_auth = Auth::CookieFile(PathBuf::from(sbcd).join(".cookie"))
+            } else {
+                if network == "regtest" {
+                    brpc_auth = Auth::CookieFile(
+                        home_dir()
+                            .expect("cannot determine home dir")
+                            .join(".bitcoin/regtest")
+                            .join(".cookie"),
+                    );
+                }
             }
-        },
-        None => return Err(anyhow!("must specify smaug_brpc_pass")),
-    };
+        }
+    }
+    if let Auth::None = brpc_auth {
+        return Err(anyhow!("must specify either `smaug_bprc_cookie_dir` or `smaug_brpc_user` and `smaug_brpc_pass`"));
+    }
+    log::trace!("using auth info: {:?}", brpc_auth);
     let ln_dir: PathBuf = configured_plugin.configuration().lightning_dir.into();
     // Create data dir if it does not exist
     fs::create_dir_all(ln_dir.join(SMAUG_DATADIR)).unwrap_or_else(|e| {
@@ -182,8 +210,7 @@ async fn main() -> Result<(), anyhow::Error> {
         network: network.clone(),
         brpc_host: brpc_host.clone(),
         brpc_port: brpc_port.clone(),
-        brpc_user: brpc_user.clone(),
-        brpc_pass: brpc_pass.clone(),
+        brpc_auth: brpc_auth.clone(),
         db_dir: ln_dir.join(SMAUG_DATADIR),
     };
     let plugin_state = Arc::new(Mutex::new(watch_descriptor.clone()));
@@ -291,20 +318,19 @@ async fn add(plugin: Plugin<State>, args: AddArgs) -> Result<serde_json::Value, 
     let mut dw = DescriptorWallet::from_args(args, plugin.state().lock().await.network.clone())
         .map_err(|e| anyhow!("error parsing args: {}", e))?;
     log::trace!("params = {:?}", dw);
-    let (db_dir, brpc_host, brpc_port, brpc_user, brpc_pass) = {
+    let (db_dir, brpc_host, brpc_port, brpc_auth) = {
         let state = plugin.state().lock().await;
         (
             state.db_dir.clone(),
             // FIXME: actually use the RpcConnection struct instead of this nonsense
             state.brpc_host.clone(),
             state.brpc_port.clone(),
-            state.brpc_user.clone(),
-            state.brpc_pass.clone(),
+            state.brpc_auth.clone(),
         )
     };
     let mut dw_clone = dw.clone();
     let wallet = dw_clone
-        .fetch_wallet(db_dir, brpc_host, brpc_port, brpc_user, brpc_pass)
+        .fetch_wallet(db_dir, brpc_host, brpc_port, brpc_auth)
         .await?;
     let bdk_transactions_iter = wallet.transactions();
     let mut transactions = Vec::<CanonicalTx<'_, Transaction, ConfirmationTimeAnchor>>::new();
@@ -346,13 +372,10 @@ async fn add(plugin: Plugin<State>, args: AddArgs) -> Result<serde_json::Value, 
         }))
         .await
         .map_err(|e| anyhow!("Error calling listdatastore: {:?}", e))?;
-    log::info!("wallet added");
-    let message = format!(
-        "Wallet with deterministic name {} successfully added",
-        &dw.get_name()?
-    );
-    log::trace!("returning");
-    Ok(json!(message))
+    let name = &dw.get_name()?;
+    let message = format!("Wallet with deterministic name {} successfully added", name);
+    log::info!("{}", message);
+    Ok(json!({"name": name, "message": message}))
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -388,10 +411,14 @@ async fn delete(
     plugin: Plugin<State>,
     descriptor_name: String,
 ) -> Result<serde_json::Value, Error> {
+    let db_dir = plugin.state().lock().await.db_dir.clone();
     let wallets = &mut plugin.state().lock().await.wallets;
     let _removed_item: Option<DescriptorWallet>;
     if wallets.contains_key(&descriptor_name) {
-        _removed_item = wallets.remove(&descriptor_name);
+        let removed_item = wallets.remove(&descriptor_name);
+        let db_path = removed_item.unwrap().get_db_file_path(db_dir).unwrap();
+        fs::remove_file(db_path.clone())?;
+        log::debug!("Deleted smaug db file at {}", db_path);
         let rpc_file = plugin.configuration().rpc_file;
         let p = Path::new(&rpc_file);
 
@@ -419,14 +446,13 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
         "Smaug state!!! {:?}",
         plugin.state().lock().await.wallets.clone()
     );
-    let (db_dir, brpc_host, brpc_port, brpc_user, brpc_pass) = {
+    let (db_dir, brpc_host, brpc_port, brpc_auth) = {
         let state = plugin.state().lock().await;
         (
             state.db_dir.clone(),
             state.brpc_host.clone(),
             state.brpc_port.clone(),
-            state.brpc_user.clone(),
-            state.brpc_pass.clone(),
+            state.brpc_auth.clone(),
         )
     };
 
@@ -445,8 +471,7 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
                 db_dir.clone(),
                 brpc_host.clone(),
                 brpc_port.clone(),
-                brpc_user.clone(),
-                brpc_pass.clone(),
+                brpc_auth.clone(),
             )
             .await?;
 
@@ -482,3 +507,92 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
     log::trace!("returning from block_added_handler");
     Ok(())
 }
+
+// #[tokio::test]
+// async fn test_list() {
+//     let builder = Builder::new(tokio::io::stdin(), tokio::io::stdout())
+//     .dynamic();
+//     let plugin = Plugin {
+//         /// The state gets cloned for each request
+//         state: S,
+//         /// "options" field of "init" message sent by cln
+//         options: Vec<ConfigOption>,
+//         /// "configuration" field of "init" message sent by cln
+//         configuration: Configuration,
+//         /// A signal that allows us to wait on the plugin's shutdown.
+//         wait_handle: tokio::sync::broadcast::Sender<()>,
+
+//         sender: tokio::sync::mpsc::Sender<serde_json::Value>,
+//     };
+//     println!("plugin = {:?}", plugin);
+// }
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use async_trait::async_trait;
+//     use mockall::mock;
+//     use std::sync::{Arc, Mutex};
+
+//     // Mocking a simplified version of Wallet and State
+//     #[derive(Clone)]
+//     struct Wallet {
+//         pub descriptor: String,
+//         pub change_descriptor: Option<String>,
+//         pub birthday: Option<u32>,
+//         pub gap: Option<u32>,
+//         pub network: Option<String>,
+//     }
+
+//     struct State {
+//         pub wallets: BTreeMap<String, Wallet>,
+//     }
+
+//     #[async_trait]
+//     pub trait StateHolder {
+//         async fn state(&self) -> Arc<Mutex<State>>;
+//     }
+
+//     mock! {
+//         Plugin {}
+
+//         #[async_trait]
+//         impl StateHolder for Plugin<State> {
+//             async fn state(&self) -> Arc<Mutex<State>>;
+//         }
+//     }
+
+//     #[tokio::test]
+//     async fn test_list_function() {
+//         // Setup mock state
+//         let mut wallets = BTreeMap::new();
+//         wallets.insert(
+//             "wallet1".to_string(),
+//             Wallet {
+//                 descriptor: "descriptor1".to_string(),
+//                 change_descriptor: Some("change1".to_string()),
+//                 birthday: Some(123),
+//                 gap: Some(5),
+//                 network: Some("network1".to_string()),
+//             },
+//         );
+
+//         let plugin = MockPlugin::new(wallets);
+
+//         // Call the function
+//         let result = list(plugin).await.unwrap();
+
+//         // Assert the expected outcome
+//         let expected_json = json!({
+//             "wallet1": {
+//                 "descriptor": "descriptor1",
+//                 "change_descriptor": "change1",
+//                 "birthday": 123,
+//                 "gap": 5,
+//                 "network": "network1"
+//             }
+//         });
+
+//         assert_eq!(result, expected_json);
+//     }
+// }
