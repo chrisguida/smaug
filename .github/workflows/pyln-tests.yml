@@ -7,7 +7,7 @@ on:
   push:
     branches: [ "add-pyln-tests-ci-workflow" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "add-pyln-tests-ci-workflow" ]
 
 permissions:
   contents: read
