@@ -46,14 +46,6 @@ jobs:
         CLN_VERSION: 23.11.2
       run: .github/scripts/install-cln.sh
 
-    - name: Download CLN build
-      uses: actions/download-artifact@v3
-      with:
-        name: cln-compile-gcc.tar.bz2
-
-    - name: Unpack CLN build
-      run: tar -xvjf cln-compile-gcc.tar.bz2
-
     - name: Run pyln-testing tests
       run: |
         poetry run -C tests pytest tests/test_rpc.py
