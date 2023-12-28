@@ -25,4 +25,3 @@ else
     sudo mv "${DIRNAME}"/bin/* "/usr/local/bin"
     rm -rf "${FILENAME}" "${DIRNAME}"
 fi
-
