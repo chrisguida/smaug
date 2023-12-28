@@ -11,3 +11,5 @@ wget "https://bitcoincore.org/bin/bitcoin-core-${BITCOIN_VERSION}/${FILENAME}"
 tar -xf "${FILENAME}"
 sudo mv "${DIRNAME}"/bin/* "/usr/local/bin"
 rm -rf "${FILENAME}" "${DIRNAME}"
+
+mkdir -p ~/.bitcoin
