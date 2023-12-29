@@ -46,9 +46,6 @@ jobs:
         CLN_VERSION: 23.11.2
       run: .github/scripts/install-cln.sh
 
-    - name: Startup regtest
-      run: .github/scripts/startup-regtest.sh
-
     - name: Run pyln-testing tests
       timeout-minutes: 3
       run: |
