@@ -51,5 +51,6 @@ jobs:
       run: |
         echo `pwd`
         echo `ls -la`
+        cargo build
         cd tests
         poetry run pytest test_rpc.py
