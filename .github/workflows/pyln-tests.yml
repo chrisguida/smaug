@@ -49,11 +49,9 @@ jobs:
     - name: Run pyln-testing tests
       timeout-minutes: 3
       run: |
-        echo `pwd`
+        cargo build
         echo $PATH
         echo `which lightningd`
-        echo `ls -la`
-        cargo build
         cd tests
         echo `ls -la`
-        poetry run pytest test_rpc.py
+        poetry run pytest test_rpc.py -sv
