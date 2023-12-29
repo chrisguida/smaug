@@ -49,4 +49,7 @@ jobs:
     - name: Run pyln-testing tests
       timeout-minutes: 3
       run: |
-        poetry run -C tests pytest tests/test_rpc.py
+        echo `pwd`
+        echo `ls -la`
+        cd tests
+        poetry run pytest test_rpc.py
