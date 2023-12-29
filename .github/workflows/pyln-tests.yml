@@ -50,8 +50,4 @@ jobs:
       timeout-minutes: 3
       run: |
         cargo build
-        echo $PATH
-        echo `which lightningd`
-        cd tests
-        echo `ls -la`
         poetry run pytest test_rpc.py -sv
