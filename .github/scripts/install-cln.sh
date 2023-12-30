@@ -17,6 +17,7 @@ cd lightning
 git checkout nifty/onchain_notif
 
 pip3 install -r plugins/clnrest/requirements.txt
+pip3 install grpcio-tools
 
 ./configure
 make -j$(nproc)
