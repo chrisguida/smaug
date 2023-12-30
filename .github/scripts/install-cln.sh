@@ -14,7 +14,7 @@ pip3 install mako
 
 git clone https://github.com/niftynei/lightning.git
 cd lightning
-git checkout niftynei/nifty/onchain_notif
+git checkout nifty/onchain_notif
 
 pip3 install -r plugins/clnrest/requirements.txt
 
