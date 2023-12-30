@@ -1,7 +1,7 @@
 # This workflow will install Python dependencies, run tests and lint with a single version of Python
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
 
-name: Run pyln-testing tests
+name: Run tests
 
 on:
   push:
@@ -9,11 +9,8 @@ on:
   pull_request:
     branches: [ "add-pyln-tests-ci-workflow" ]
 
-permissions:
-  contents: read
-
 jobs:
-  build:
+  test:
     runs-on: ubuntu-22.04
 
     steps:
@@ -23,34 +20,30 @@ jobs:
       with:
         python-version: 3.11
     - name: Install dependencies
-      # working-directory: tests
       run: |
         python -m pip install --upgrade pip
         pip install poetry
         poetry install -C tests --no-interaction --no-root
 
-        #    if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        # - name: Lint with flake8
-        #  run: |
-        #    # stop the build if there are Python syntax errors or undefined names
-        #    flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        #    # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        #    flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    # - name: Lint with flake8
+    #  run: |
+    #    # stop the build if there are Python syntax errors or undefined names
+    #    flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+    #    # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+    #    flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
     - name: Install bitcoind
       env:
         BITCOIN_VERSION: 25.1
       run: .github/scripts/install-bitcoind.sh
 
     - name: Install CLN
-      env:
-        CLN_VERSION: 23.11.2
       run: .github/scripts/install-cln.sh
 
     - name: Build smaug
-      run: |
-        cargo build
+      run: cargo build
 
-    - name: Run pyln-testing tests
+    - name: Run pyln tests
       timeout-minutes: 5
       run: |
         cd tests
