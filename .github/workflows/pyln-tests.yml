@@ -46,8 +46,12 @@ jobs:
         CLN_VERSION: 23.11.2
       run: .github/scripts/install-cln.sh
 
-    - name: Run pyln-testing tests
-      timeout-minutes: 3
+    - name: Build smaug
       run: |
         cargo build
+
+    - name: Run pyln-testing tests
+      timeout-minutes: 5
+      run: |
+        cd tests
         poetry run pytest test_rpc.py -sv
