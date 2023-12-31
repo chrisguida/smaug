@@ -22,7 +22,7 @@ jobs:
           poetry install -C tests --no-interaction --no-root
       - name: Install bitcoind
         env:
-          BITCOIN_VERSION: 25.1
+          BITCOIN_VERSION: 26.0
         run: .github/scripts/install-bitcoind.sh
       - name: Install CLN
         run: .github/scripts/install-cln.sh
@@ -30,6 +30,4 @@ jobs:
         run: cargo build
       - name: Run pyln tests
         timeout-minutes: 5
-        run: |
-          cd tests
-          poetry run pytest test_rpc.py -s
+        run: cd tests && poetry run pytest test_rpc.py -v
