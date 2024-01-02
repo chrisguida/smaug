@@ -15,11 +15,10 @@ from pyln.client import Millisatoshi
 from pyln.testing.utils import BITCOIND_CONFIG, only_one, wait_for
 from utils import *
 
-
-# @pytest.mark.developer("Requires dev_sign_last_tx")
-def test_smaug(node_factory, bitcoind):
+def test_bkpr_integration(ln_node, bitcoind):
     """
-    Test Smaug.
+    Test Smaug and bkpr integration
+    Note: this test is invalid until bkpr shared tx income calculation is fixed
     """
 
     def generate():
@@ -31,17 +30,6 @@ def test_smaug(node_factory, bitcoind):
     SMAUG_INITIAL_AMOUNT_BTC = sats_to_btc(SMAUG_INITIAL_AMOUNT_SAT)
     CLN_INITIAL_AMOUNT_SAT = 10_000_000
     CLN_INITIAL_AMOUNT_MSAT = Millisatoshi(CLN_INITIAL_AMOUNT_SAT * 10**3)
-
-    l1 = node_factory.get_nodes(
-        1,
-        opts={
-            "allow_broken_log": True,
-            "plugin": SMAUG_PLUGIN,
-            "smaug_brpc_user": BITCOIND_CONFIG["rpcuser"],
-            "smaug_brpc_pass": BITCOIND_CONFIG["rpcpassword"],
-            "smaug_brpc_port": BITCOIND_CONFIG["rpcport"],
-        },
-    )[0]
 
     # make a new wallet to use with smaug because the default wallet is full
     # of coinbases, which muddles the test results.
@@ -72,17 +60,17 @@ def test_smaug(node_factory, bitcoind):
     # this subtracts 1M sat (+141 sats for fee) from our bitcoind wallet
     # this will generate 3 more bkpr events for our smaug wallet:
     # 1 utxo_spent for our input and 2 utxo_deposits for the outputs
-    cln_addr = l1.rpc.newaddr()["bech32"]
+    cln_addr = ln_node.rpc.newaddr()["bech32"]
     bitcoind.rpc.sendtoaddress(cln_addr, sats_to_btc(CLN_INITIAL_AMOUNT_SAT))
     generate()
     # now we should have 100_000_000 - 10_000_141 sats
     assert get_bitcoind_wallet_bal_sats(bitcoind) == 89_999_859
 
     # wait for funds to show up in CLN
-    wait_for(lambda: len(l1.rpc.listfunds()["outputs"]) == 1)
+    wait_for(lambda: len(ln_node.rpc.listfunds()["outputs"]) == 1)
 
     # verify that the 10Msat showed up in the main CLN wallet in bkpr
-    bkpr_balances = l1.rpc.bkpr_listbalances()["accounts"]
+    bkpr_balances = ln_node.rpc.bkpr_listbalances()["accounts"]
     cln_balance = get_cln_balance(bkpr_balances)
     assert cln_balance["coin_type"] == "bcrt"
     assert cln_balance["balance_msat"] == CLN_INITIAL_AMOUNT_MSAT
@@ -106,9 +94,9 @@ def test_smaug(node_factory, bitcoind):
     assert Millisatoshi(str(smaug_utxo['amount']) + "btc") == smaug_txout_amount_msat # 89_999_859sat
 
     # then grab CLN's 10_000_000 sat output
-    cln_utxo = only_one(l1.rpc.listfunds()['outputs'])
+    cln_utxo = only_one(ln_node.rpc.listfunds()['outputs'])
     assert cln_utxo['amount_msat'] == CLN_INITIAL_AMOUNT_MSAT
-    cln_addr = l1.rpc.newaddr()['bech32']
+    cln_addr = ln_node.rpc.newaddr()['bech32']
     btc_addr = bitcoind.rpc.getnewaddress()
 
     # total inputs = 10_000_000 + 89_999_859 = 99_999_859
@@ -133,12 +121,12 @@ def test_smaug(node_factory, bitcoind):
             {btc_addr: str(amt_to_smaug_btc)}
         ]
     )
-    assert only_one(l1.rpc.reserveinputs(raw_psbt)['reservations'])['reserved']
-    l1_signed_psbt = l1.rpc.signpsbt(raw_psbt, [1])['signed_psbt']
+    assert only_one(ln_node.rpc.reserveinputs(raw_psbt)['reservations'])['reserved']
+    l1_signed_psbt = ln_node.rpc.signpsbt(raw_psbt, [1])['signed_psbt']
     process_res = bitcoind.rpc.walletprocesspsbt(l1_signed_psbt)
     assert process_res['complete']
 
-    txid = l1.rpc.sendpsbt(process_res['psbt'])['txid']
+    txid = ln_node.rpc.sendpsbt(process_res['psbt'])['txid']
 
     generate()
 
@@ -154,17 +142,17 @@ def test_smaug(node_factory, bitcoind):
     print("internal_descriptor = %s " % internal_descriptor)
     print("external_descriptor = %s " % external_descriptor)
 
-    # print("smaug ls result = %s" % l1.rpc.smaug("ls"))
-    # name = l1.rpc.smaug("add", external_descriptor, internal_descriptor)["name"]
+    # print("smaug ls result = %s" % ln_node.rpc.smaug("ls"))
+    # name = ln_node.rpc.smaug("add", external_descriptor, internal_descriptor)["name"]
 
-    # bkpr_balances = l1.rpc.bkpr_listbalances()["accounts"]
+    # bkpr_balances = ln_node.rpc.bkpr_listbalances()["accounts"]
     # bitcoind_smaug_balance = get_bkpr_smaug_balance(name, bkpr_balances)
     # assert bitcoind_smaug_balance["coin_type"] == "bcrt"
     # assert bitcoind_smaug_balance["balance_msat"] == get_bitcoind_wallet_bal_sats(bitcoind) * 10**3
 
     # there should now be 12 events in our bkpr_listaccountevents() call:
 
-    all_accountevents = l1.rpc.bkpr_listaccountevents()['events']
+    all_accountevents = ln_node.rpc.bkpr_listaccountevents()['events']
 
     # 4 for the `wallet` account:
     #   1 journal_entry for 0 msats (this entry will be removed from bkpr soon?)
@@ -194,15 +182,9 @@ def test_smaug(node_factory, bitcoind):
     #       10M sats for initial CLN wallet deposit
     #       20M sats for payjoin output
 
-    # there should also be
-
     pprint(all_accountevents)
 
-    all_incomeevents = l1.rpc.bkpr_listincome()['income_events']
+    all_incomeevents = ln_node.rpc.bkpr_listincome()['income_events']
     pprint(all_incomeevents)
 
-    # catch bkpr log
-    # find event in bkpr events
-    # verify new balance
-
-    assert False
+    # TODO: fix bkpr upstream payjoin calcs and finish this test
