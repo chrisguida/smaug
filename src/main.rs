@@ -382,7 +382,7 @@ async fn add(plugin: Plugin<State>, args: AddArgs) -> Result<serde_json::Value, 
 struct ListResponseItem {
     pub descriptor: String,
     pub change_descriptor: Option<String>,
-    pub balance: Option<u64>,
+    pub balance: u64,
     pub birthday: Option<u32>,
     pub gap: Option<u32>,
     pub network: Option<String>,
@@ -418,7 +418,7 @@ async fn list(plugin: Plugin<State>) -> Result<serde_json::Value, Error> {
             ListResponseItem {
                 descriptor: wallet.descriptor.clone(),
                 change_descriptor: wallet.change_descriptor.clone(),
-                balance: Some(bdk_wallet.get_balance().total()),
+                balance: bdk_wallet.get_balance().total(),
                 birthday: wallet.birthday.clone(),
                 gap: wallet.gap.clone(),
                 network: wallet.network.clone(),
