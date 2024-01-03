@@ -27,4 +27,4 @@ jobs:
         run: cargo build
       - name: Run pyln tests
         timeout-minutes: 5
-        run: cd tests && poetry run pytest test_rpc.py -v
+        run: cd tests && poetry run pytest -v
