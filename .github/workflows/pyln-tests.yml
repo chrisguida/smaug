@@ -1,0 +1,30 @@
+name: Run tests
+
+on:
+  push:
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+          poetry install -C tests --no-interaction --no-root
+      - name: Install bitcoind
+        env:
+          BITCOIN_VERSION: "26.0"
+        run: .github/scripts/install-bitcoind.sh
+      - name: Install CLN
+        run: .github/scripts/install-cln.sh
+      - name: Build smaug
+        run: cargo build
+      - name: Run pyln tests
+        timeout-minutes: 5
+        run: cd tests && poetry run pytest -v

@@ -96,19 +96,10 @@ def test_rpc_list(bitcoind, ln_node):
         == sorted(list(smaug_wallet_2.keys()))
         == asserted_keys
     )
-
-    regex_ns_d = (
-        r"^wpkh\(\[[a-f0-9]{8}\/84'\/1'\/0'\]tpub[a-zA-Z0-9]{107}\/0\/\*\)#[a-z0-9]{8}$"
-    )
-    regex_ns_cd = (
-        r"^wpkh\(\[[a-f0-9]{8}\/84'\/1'\/0'\]tpub[a-zA-Z0-9]{107}\/1\/\*\)#[a-z0-9]{8}$"
-    )
-    regex_tr_d = (
-        r"^tr\(\[[a-f0-9]{8}\/86'\/1'\/0'\]tpub[a-zA-Z0-9]{107}\/0\/\*\)#[a-z0-9]{8}$"
-    )
-    regex_tr_cd = (
-        r"^tr\(\[[a-f0-9]{8}\/86'\/1'\/0'\]tpub[a-zA-Z0-9]{107}\/1\/\*\)#[a-z0-9]{8}$"
-    )
+    regex_ns_d = r"^wpkh\(\[[a-f0-9]{8}\/84(h|')\/1(h|')\/0(h|')\]tpub[a-zA-Z0-9]{107}\/0\/\*\)#[a-z0-9]{8}$"
+    regex_ns_cd = r"^wpkh\(\[[a-f0-9]{8}\/84(h|')\/1(h|')\/0(h|')\]tpub[a-zA-Z0-9]{107}\/1\/\*\)#[a-z0-9]{8}$"
+    regex_tr_d = r"^tr\(\[[a-f0-9]{8}\/86(h|')\/1(h|')\/0(h|')\]tpub[a-zA-Z0-9]{107}\/0\/\*\)#[a-z0-9]{8}$"
+    regex_tr_cd = r"^tr\(\[[a-f0-9]{8}\/86(h|')\/1(h|')\/0(h|')\]tpub[a-zA-Z0-9]{107}\/1\/\*\)#[a-z0-9]{8}$"
     assert re.search(regex_ns_d, smaug_wallet_1["descriptor"]) is not None
     assert re.search(regex_ns_cd, smaug_wallet_1["change_descriptor"]) is not None
     assert smaug_wallet_1["birthday"] == 821000
