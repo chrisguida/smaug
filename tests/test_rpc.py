@@ -3,6 +3,7 @@ import re
 from conftest import SMAUG_PLUGIN
 from fixtures import *
 from pyln.client import Millisatoshi
+from pyln.client.lightning import RpcError
 from pyln.testing.utils import BITCOIND_CONFIG, only_one, wait_for
 from utils import get_bkpr_smaug_balance, get_only_one_descriptor
 
@@ -146,3 +147,35 @@ def test_rpc_remove(bitcoind, ln_node):
     assert len(smaug_wallets) == 0
     assert result == f"Deleted wallet: {wallet_name}"
     assert not os.path.isfile(db_file_path)
+
+
+def test_rpc_remove_failed(bitcoind, ln_node):
+    """
+    Test failing RPC remove
+    """
+
+    # Get external/internal only_one descriptors
+    internal_descriptor = get_only_one_descriptor(bitcoind, "wpkh", True)
+    external_descriptor = get_only_one_descriptor(bitcoind, "wpkh", False)
+
+    # Add wallet to smaug
+    wallet = ln_node.rpc.smaug("add", external_descriptor, internal_descriptor)
+    wallet_name = wallet["name"]
+    db_file_path = f"{str(ln_node.lightning_dir)}/regtest/.smaug/{wallet_name}.db"
+
+    smaug_wallets = ln_node.rpc.smaug("ls")
+    assert len(smaug_wallets) == 1
+    assert wallet_name in smaug_wallets
+    assert os.path.isfile(db_file_path)
+
+    # Try removing nonexistent wallet from smaug
+    with pytest.raises(RpcError) as e:
+        ln_node.rpc.smaug("remove", "NONEXISTENT_WALLET")
+    assert (
+        "RPC call failed: method: smaug, payload: ('remove', 'NONEXISTENT_WALLET'), error: Can't find wallet 'NONEXISTENT_WALLET'."
+        in str(e.value)
+    )
+
+    smaug_wallets = ln_node.rpc.smaug("ls")
+    assert len(smaug_wallets) == 1
+    assert os.path.isfile(db_file_path)
