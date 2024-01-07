@@ -50,6 +50,7 @@ def switch_wallet(bitcoind, wallet_name):
         if w != wallet_name:
             bitcoind.rpc.unloadwallet(w)
 
+
 def send_from_wallet(bitcoind, wallet_name, address, amount):
     current_wallet_name = only_one(bitcoind.rpc.listwallets())
     if current_wallet_name != wallet_name:
@@ -58,7 +59,10 @@ def send_from_wallet(bitcoind, wallet_name, address, amount):
     if current_wallet_name != wallet_name:
         switch_wallet(bitcoind, current_wallet_name)
 
-def generate_to_mining_wallet(bitcoind, mining_wallet_name, transacting_wallet_name, num_blocks=1):
+
+def generate_to_mining_wallet(
+    bitcoind, mining_wallet_name, transacting_wallet_name, num_blocks=1
+):
     switch_wallet(bitcoind, mining_wallet_name)
     bitcoind.generate_block(num_blocks)
     switch_wallet(bitcoind, transacting_wallet_name)

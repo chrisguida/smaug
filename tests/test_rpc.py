@@ -1,15 +1,12 @@
+import os
 import re
 
-from conftest import SMAUG_PLUGIN
-from fixtures import *
-from pyln.client import Millisatoshi
-from pyln.testing.utils import BITCOIND_CONFIG, only_one, wait_for
 from utils import get_bkpr_smaug_balance, get_only_one_descriptor
 
 
 def test_rpc_add(bitcoind, ln_node):
     """
-    Test RPC add.
+    Test RPC add
     """
 
     # Get external/internal only_one descriptors
@@ -54,7 +51,7 @@ def test_rpc_add(bitcoind, ln_node):
 
 def test_rpc_list(bitcoind, ln_node):
     """
-    Test RPC list.
+    Test RPC list
     """
 
     # Get external/internal only_one descriptors
@@ -122,7 +119,7 @@ def test_rpc_list(bitcoind, ln_node):
 
 def test_rpc_remove(bitcoind, ln_node):
     """
-    Test RPC remove.
+    Test RPC remove
     """
 
     # Get external/internal only_one descriptors
