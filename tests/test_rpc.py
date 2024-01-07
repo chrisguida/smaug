@@ -1,16 +1,14 @@
+import os
 import re
 
-from conftest import SMAUG_PLUGIN
-from fixtures import *
-from pyln.client import Millisatoshi
+import pytest
 from pyln.client.lightning import RpcError
-from pyln.testing.utils import BITCOIND_CONFIG, only_one, wait_for
 from utils import get_bkpr_smaug_balance, get_only_one_descriptor
 
 
 def test_rpc_add(bitcoind, ln_node):
     """
-    Test RPC add.
+    Test RPC add
     """
 
     # Get external/internal only_one descriptors
@@ -22,12 +20,17 @@ def test_rpc_add(bitcoind, ln_node):
 
     # Add a wallet to smaug
     wallet = ln_node.rpc.smaug(
-        "add", external_descriptor_wpkh, internal_descriptor_wpkh, "821000", "5000"
+        "add",
+        external_descriptor_wpkh,
+        internal_descriptor_wpkh,
+        "821000",
+        "5000",
     )
     wallet_name = wallet["name"]
 
     asserted = {
-        "message": f"Wallet with deterministic name {wallet_name} successfully added",
+        "message": f"Wallet with deterministic name {wallet_name} "
+        "successfully added",
         "name": wallet_name,
     }
 
@@ -55,7 +58,7 @@ def test_rpc_add(bitcoind, ln_node):
 
 def test_rpc_list(bitcoind, ln_node):
     """
-    Test RPC list.
+    Test RPC list
     """
 
     # Get external/internal only_one descriptors
@@ -66,7 +69,11 @@ def test_rpc_list(bitcoind, ln_node):
 
     # Add two wallets to smaug
     wallet1 = ln_node.rpc.smaug(
-        "add", external_descriptor_wpkh, internal_descriptor_wpkh, "821000", "5000"
+        "add",
+        external_descriptor_wpkh,
+        internal_descriptor_wpkh,
+        "821000",
+        "5000",
     )
     wallet2 = ln_node.rpc.smaug(
         "add", external_descriptor_tr, internal_descriptor_tr, "821001", "5001"
@@ -97,16 +104,20 @@ def test_rpc_list(bitcoind, ln_node):
         == sorted(list(smaug_wallet_2.keys()))
         == asserted_keys
     )
-    regex_ns_d = r"^wpkh\(\[[a-f0-9]{8}\/84(h|')\/1(h|')\/0(h|')\]tpub[a-zA-Z0-9]{107}\/0\/\*\)#[a-z0-9]{8}$"
-    regex_ns_cd = r"^wpkh\(\[[a-f0-9]{8}\/84(h|')\/1(h|')\/0(h|')\]tpub[a-zA-Z0-9]{107}\/1\/\*\)#[a-z0-9]{8}$"
-    regex_tr_d = r"^tr\(\[[a-f0-9]{8}\/86(h|')\/1(h|')\/0(h|')\]tpub[a-zA-Z0-9]{107}\/0\/\*\)#[a-z0-9]{8}$"
-    regex_tr_cd = r"^tr\(\[[a-f0-9]{8}\/86(h|')\/1(h|')\/0(h|')\]tpub[a-zA-Z0-9]{107}\/1\/\*\)#[a-z0-9]{8}$"
+    regex_ns_d = r"^wpkh\(\[[a-f0-9]{8}\/84(h|')\/1(h|')\/0(h|')\]tpub[a-zA-Z0-9]{107}\/0\/\*\)#[a-z0-9]{8}$"  # noqa: E501
+    regex_ns_cd = r"^wpkh\(\[[a-f0-9]{8}\/84(h|')\/1(h|')\/0(h|')\]tpub[a-zA-Z0-9]{107}\/1\/\*\)#[a-z0-9]{8}$"  # noqa: E501
+    regex_tr_d = r"^tr\(\[[a-f0-9]{8}\/86(h|')\/1(h|')\/0(h|')\]tpub[a-zA-Z0-9]{107}\/0\/\*\)#[a-z0-9]{8}$"  # noqa: E501
+    regex_tr_cd = r"^tr\(\[[a-f0-9]{8}\/86(h|')\/1(h|')\/0(h|')\]tpub[a-zA-Z0-9]{107}\/1\/\*\)#[a-z0-9]{8}$"  # noqa: E501
     assert re.search(regex_ns_d, smaug_wallet_1["descriptor"]) is not None
-    assert re.search(regex_ns_cd, smaug_wallet_1["change_descriptor"]) is not None
+    assert (
+        re.search(regex_ns_cd, smaug_wallet_1["change_descriptor"]) is not None
+    )
     assert smaug_wallet_1["birthday"] == 821000
     assert smaug_wallet_1["gap"] == 5000
     assert re.search(regex_tr_d, smaug_wallet_2["descriptor"]) is not None
-    assert re.search(regex_tr_cd, smaug_wallet_2["change_descriptor"]) is not None
+    assert (
+        re.search(regex_tr_cd, smaug_wallet_2["change_descriptor"]) is not None
+    )
     assert smaug_wallet_2["birthday"] == 821001
     assert smaug_wallet_2["gap"] == 5001
 
@@ -117,13 +128,15 @@ def test_rpc_list(bitcoind, ln_node):
 
     # Additionally verify balance against bookkeeper
     bkpr_balances = ln_node.rpc.bkpr_listbalances()["accounts"]
-    bitcoind_smaug_balance = get_bkpr_smaug_balance(wallet1_name, bkpr_balances)
+    bitcoind_smaug_balance = get_bkpr_smaug_balance(
+        wallet1_name, bkpr_balances
+    )
     assert bitcoind_smaug_balance["balance_msat"] / 1000 == asserted_balance
 
 
 def test_rpc_remove(bitcoind, ln_node):
     """
-    Test RPC remove.
+    Test RPC remove
     """
 
     # Get external/internal only_one descriptors
@@ -133,7 +146,9 @@ def test_rpc_remove(bitcoind, ln_node):
     # Add wallet to smaug
     wallet = ln_node.rpc.smaug("add", external_descriptor, internal_descriptor)
     wallet_name = wallet["name"]
-    db_file_path = f"{str(ln_node.lightning_dir)}/regtest/.smaug/{wallet_name}.db"
+    db_file_path = (
+        f"{str(ln_node.lightning_dir)}/regtest/.smaug/{wallet_name}.db"
+    )
 
     smaug_wallets = ln_node.rpc.smaug("ls")
     assert len(smaug_wallets) == 1
@@ -161,7 +176,9 @@ def test_rpc_remove_failed(bitcoind, ln_node):
     # Add wallet to smaug
     wallet = ln_node.rpc.smaug("add", external_descriptor, internal_descriptor)
     wallet_name = wallet["name"]
-    db_file_path = f"{str(ln_node.lightning_dir)}/regtest/.smaug/{wallet_name}.db"
+    db_file_path = (
+        f"{str(ln_node.lightning_dir)}/regtest/.smaug/{wallet_name}.db"
+    )
 
     smaug_wallets = ln_node.rpc.smaug("ls")
     assert len(smaug_wallets) == 1
@@ -172,7 +189,8 @@ def test_rpc_remove_failed(bitcoind, ln_node):
     with pytest.raises(RpcError) as e:
         ln_node.rpc.smaug("remove", "NONEXISTENT_WALLET")
     assert (
-        "RPC call failed: method: smaug, payload: ('remove', 'NONEXISTENT_WALLET'), error: Can't find wallet 'NONEXISTENT_WALLET'."
+        "RPC call failed: method: smaug, payload: ('remove', "
+        "'NONEXISTENT_WALLET'), error: Can't find wallet 'NONEXISTENT_WALLET'."
         in str(e.value)
     )
 
