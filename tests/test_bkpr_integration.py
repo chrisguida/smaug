@@ -9,11 +9,19 @@
 from decimal import Decimal
 from pprint import pprint
 
-from conftest import SMAUG_PLUGIN
-from fixtures import *
 from pyln.client import Millisatoshi
-from pyln.testing.utils import BITCOIND_CONFIG, only_one, wait_for
-from utils import *
+from pyln.testing.utils import only_one, wait_for
+from utils import (
+    btc_to_sats,
+    generate_to_mining_wallet,
+    get_bitcoind_wallet_bal_sats,
+    get_cln_balance,
+    get_descriptor,
+    sats_to_btc,
+    send_from_wallet,
+    switch_wallet,
+)
+
 
 def test_bkpr_integration(ln_node, bitcoind):
     """
@@ -44,10 +52,16 @@ def test_bkpr_integration(ln_node, bitcoind):
     # this should create our first utxo_deposit event
     # (once we add the wallet to smaug)
     initial_smaug_receive_addr = bitcoind.rpc.getnewaddress()
-    send_from_wallet(bitcoind, MINING_WALLET_NAME, initial_smaug_receive_addr, SMAUG_INITIAL_AMOUNT_BTC)
+    send_from_wallet(
+        bitcoind,
+        MINING_WALLET_NAME,
+        initial_smaug_receive_addr,
+        SMAUG_INITIAL_AMOUNT_BTC,
+    )
     generate()
-    assert get_bitcoind_wallet_bal_sats(bitcoind) == btc_to_sats(SMAUG_INITIAL_AMOUNT_BTC)
-
+    assert get_bitcoind_wallet_bal_sats(bitcoind) == btc_to_sats(
+        SMAUG_INITIAL_AMOUNT_BTC
+    )
 
     ### simple spend ###
     # 1 input which is ours (send utxo_spent for 100M sats)
@@ -89,44 +103,47 @@ def test_bkpr_integration(ln_node, bitcoind):
     unspent = bitcoind.rpc.listunspent()
     pprint(unspent)
     smaug_utxo = only_one(unspent)
-    smaug_txout_amount_sat = (SMAUG_INITIAL_AMOUNT_SAT - CLN_INITIAL_AMOUNT_SAT - 141)
+    smaug_txout_amount_sat = SMAUG_INITIAL_AMOUNT_SAT - CLN_INITIAL_AMOUNT_SAT - 141
     smaug_txout_amount_msat = Millisatoshi(str(smaug_txout_amount_sat) + "sat")
-    assert Millisatoshi(str(smaug_utxo['amount']) + "btc") == smaug_txout_amount_msat # 89_999_859sat
+    assert (
+        Millisatoshi(str(smaug_utxo["amount"]) + "btc") == smaug_txout_amount_msat
+    )  # 89_999_859sat
 
     # then grab CLN's 10_000_000 sat output
-    cln_utxo = only_one(ln_node.rpc.listfunds()['outputs'])
-    assert cln_utxo['amount_msat'] == CLN_INITIAL_AMOUNT_MSAT
-    cln_addr = ln_node.rpc.newaddr()['bech32']
+    cln_utxo = only_one(ln_node.rpc.listfunds()["outputs"])
+    assert cln_utxo["amount_msat"] == CLN_INITIAL_AMOUNT_MSAT
+    cln_addr = ln_node.rpc.newaddr()["bech32"]
     btc_addr = bitcoind.rpc.getnewaddress()
 
     # total inputs = 10_000_000 + 89_999_859 = 99_999_859
     fee_amt_msat = Millisatoshi("1000sat")
 
     # total outputs = 99_999_859 - 1000 = 99_998_859
-    
+
     # amount to CLN = 10_000_000 from CLN plus 10_000_000 from smaug = 20_000_000
-    amt_from_smaug_to_cln_btc = Decimal('0.1')
+    amt_from_smaug_to_cln_btc = Decimal("0.1")
     amt_to_cln_btc = CLN_INITIAL_AMOUNT_MSAT.to_btc() + amt_from_smaug_to_cln_btc
-    
+
     # amount to Smaug = 99_998_859 - 20_000_000 = 79_998_859
-    amt_to_smaug_btc = smaug_txout_amount_msat.to_btc() - amt_from_smaug_to_cln_btc - fee_amt_msat.to_btc()
-    
+    amt_to_smaug_btc = (
+        smaug_txout_amount_msat.to_btc()
+        - amt_from_smaug_to_cln_btc
+        - fee_amt_msat.to_btc()
+    )
+
     raw_psbt = bitcoind.rpc.createpsbt(
         [
             {"txid": smaug_utxo["txid"], "vout": smaug_utxo["vout"]},
-            {"txid": cln_utxo["txid"], "vout": cln_utxo["output"]}
+            {"txid": cln_utxo["txid"], "vout": cln_utxo["output"]},
         ],
-        [
-            {cln_addr: str(amt_to_cln_btc)},
-            {btc_addr: str(amt_to_smaug_btc)}
-        ]
+        [{cln_addr: str(amt_to_cln_btc)}, {btc_addr: str(amt_to_smaug_btc)}],
     )
-    assert only_one(ln_node.rpc.reserveinputs(raw_psbt)['reservations'])['reserved']
-    l1_signed_psbt = ln_node.rpc.signpsbt(raw_psbt, [1])['signed_psbt']
+    assert only_one(ln_node.rpc.reserveinputs(raw_psbt)["reservations"])["reserved"]
+    l1_signed_psbt = ln_node.rpc.signpsbt(raw_psbt, [1])["signed_psbt"]
     process_res = bitcoind.rpc.walletprocesspsbt(l1_signed_psbt)
-    assert process_res['complete']
+    assert process_res["complete"]
 
-    txid = ln_node.rpc.sendpsbt(process_res['psbt'])['txid']
+    ln_node.rpc.sendpsbt(process_res["psbt"])["txid"]  # returns txid
 
     generate()
 
@@ -152,7 +169,7 @@ def test_bkpr_integration(ln_node, bitcoind):
 
     # there should now be 12 events in our bkpr_listaccountevents() call:
 
-    all_accountevents = ln_node.rpc.bkpr_listaccountevents()['events']
+    all_accountevents = ln_node.rpc.bkpr_listaccountevents()["events"]
 
     # 4 for the `wallet` account:
     #   1 journal_entry for 0 msats (this entry will be removed from bkpr soon?)
@@ -163,9 +180,20 @@ def test_bkpr_integration(ln_node, bitcoind):
     #     10M sats for payjoin input
 
     # smaug_accountevents = list(filter(lambda x: x["account"] == "smaug:%s" % name, all_accountevents))
-    external_accountevents = list(filter(lambda x: x["account"] == "external", all_accountevents))
-    non_cln_accountevents = list(filter(lambda x: x["account"] != "wallet", all_accountevents))
-    accountevents = list(filter(lambda x: x.get("outpoint") == "42d4c98bbbdd16c11d150e2f9e038466c52341a13adfd81d33d8385a2ef90113:0", all_accountevents))
+    list(
+        filter(lambda x: x["account"] == "external", all_accountevents)
+    )  # returns external_accountevents
+    list(
+        filter(lambda x: x["account"] != "wallet", all_accountevents)
+    )  # returns non_cln_accountevents
+    list(
+        filter(
+            lambda x: x.get("outpoint")
+            == "42d4c98bbbdd16c11d150e2f9e038466c52341a13adfd81d33d8385a2ef90113:0",
+            all_accountevents,
+        )
+    )  # returns accountevents
+
     # assert len(smaug_accountevents) == 8
 
     # 8 for the `smaug:{name}` account:
@@ -184,7 +212,7 @@ def test_bkpr_integration(ln_node, bitcoind):
 
     pprint(all_accountevents)
 
-    all_incomeevents = ln_node.rpc.bkpr_listincome()['income_events']
+    all_incomeevents = ln_node.rpc.bkpr_listincome()["income_events"]
     pprint(all_incomeevents)
 
     # TODO: fix bkpr upstream payjoin calcs and finish this test
