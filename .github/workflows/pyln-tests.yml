@@ -28,3 +28,14 @@ jobs:
       - name: Run pyln tests
         timeout-minutes: 5
         run: cd tests && poetry run pytest -v
+
+  pre-commit:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      - name: Copy .pre-commit-config.yaml to project root
+        run: cp tests/.pre-commit-config.yaml .
+      - uses: pre-commit/action@v3.0.0
