@@ -432,31 +432,35 @@ async fn delete(
     plugin: Plugin<State>,
     descriptor_name: String,
 ) -> Result<serde_json::Value, Error> {
-    let db_dir = plugin.state().lock().await.db_dir.clone();
+    let db_dir_path = plugin.state().lock().await.db_dir.clone();
     let wallets = &mut plugin.state().lock().await.wallets;
-    let _removed_item: Option<DescriptorWallet>;
-    if wallets.contains_key(&descriptor_name) {
-        let removed_item = wallets.remove(&descriptor_name);
-        let db_path = removed_item.unwrap().get_db_file_path(db_dir).unwrap();
-        fs::remove_file(db_path.clone())?;
-        log::debug!("Deleted smaug db file at {}", db_path);
-        let rpc_file = plugin.configuration().rpc_file;
-        let p = Path::new(&rpc_file);
 
-        let mut rpc = ClnRpc::new(p).await?;
-        let _ds_response = rpc
-            .call(Request::Datastore(DatastoreRequest {
-                key: vec!["smaug".to_owned()],
-                string: Some(json!(wallets).to_string()),
-                hex: None,
-                mode: Some(DatastoreMode::CREATE_OR_REPLACE),
-                generation: None,
-            }))
-            .await
-            .map_err(|e| anyhow!("Error calling listdatastore: {:?}", e))?;
-    } else {
-        return Err(anyhow!("can't find wallet {}", descriptor_name));
-    }
+    let removed_item = wallets.remove(&descriptor_name);
+    let db_file_path = match removed_item {
+        Some(dw) => {
+            match dw.get_db_file_path(db_dir_path) {
+                Ok(dw) => dw,
+                Err(e) => return Err(e),
+            }
+        },
+        None => return Err(anyhow!("Can't find wallet '{}'.", descriptor_name)),
+    };
+    fs::remove_file(db_file_path.clone())?;
+    log::debug!("Deleted smaug db file at {}", db_file_path);
+    let rpc_file = plugin.configuration().rpc_file;
+    let p = Path::new(&rpc_file);
+
+    let mut rpc = ClnRpc::new(p).await?;
+    let _ds_response = rpc
+        .call(Request::Datastore(DatastoreRequest {
+            key: vec!["smaug".to_owned()],
+            string: Some(json!(wallets).to_string()),
+            hex: None,
+            mode: Some(DatastoreMode::CREATE_OR_REPLACE),
+            generation: None,
+        }))
+        .await
+        .map_err(|e| anyhow!("Error calling listdatastore: {:?}", e))?;
 
     Ok(json!(format!("Deleted wallet: {}", descriptor_name)))
 }
