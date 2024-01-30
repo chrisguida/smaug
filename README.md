@@ -1,7 +1,7 @@
 # smaug
 `smaug` is a Rust-based CLN plugin that allows CLN’s bookkeeper plugin to track coin movements in external descriptor wallets, enabling businesses to obtain a complete picture of all bitcoin inflows and outflows.
 
-It utilizes [cln-plugin](https://docs.rs/cln-plugin/latest/cln_plugin/) and the [BDK library](https://github.com/bitcoindevkit/bdk) to track coin movements in registered wallets and report this information to the bookkeeper plugin. 
+It utilizes [cln-plugin](https://docs.rs/cln-plugin/latest/cln_plugin/) and the [BDK library](https://github.com/bitcoindevkit/bdk) to track coin movements in registered wallets and report this information to the bookkeeper plugin.
 
 This enables businesses to design a complete treasury using [Miniscript](https://bitcoin.sipa.be/miniscript/) and import the resulting descriptor into CLN. Since bookkeeper already accounts for all coin movements internal to CLN, this plugin is the last piece businesses need in order to unify all their bitcoin accounting in one place. This enables businesses to account for all inflows and outflows from their operations, streamlining tax reporting and financial analysis.
 
@@ -63,7 +63,8 @@ Then run:
 lightning-cli plugin -k subcommand=start plugin=</path/to/smaug> smaug_brpc_user=<bitcoind rpc username> smaug_brpc_pass=<bitcoind rpc password>
 ```
 
-Note that `smaug_brpc_user` and `smaug_brpc_pass` are currently required.
+> [!NOTE]
+> `smaug_brpc_user` and `smaug_brpc_pass` are currently required.
 
 You may also specify `smaug_brpc_host` and `smaug_brpc_port` to use a custom address.
 
@@ -117,7 +118,32 @@ You can do `lightning-cli help | grep bkpr` to see a list of commands for viewin
 
 ## Development
 
-I recommend you follow the instructions in Building[#Building] to install Nix and then run `nix develop`. This will drop you into a development shell, with a nice shell hook containing some instructions for how to spin up a regtest bitcoin node and two connected CLN nodes.
+We recommend you follow the instructions in [Building](##building) to install Nix and then run `nix develop`. This will drop you into a development shell, with a nice shell hook containing some instructions for how to spin up a regtest bitcoin node and two connected CLN nodes.
+
+To further set up your environment for development we need to install some Python packages from inside the `tests` directory:
+
+#### Install Python packages
+```
+cd tests
+poetry shell
+poetry install --no-root
+```
+
+#### Install the pre-commit Git hook
+```
+pre-commit install
+```
+
+The [pre-commit](https://pre-commit.com/) Git hook will enforce code formatting and linting on the Python code utilizing the [black](https://black.readthedocs.io/en/stable/), [isort](https://pycqa.github.io/isort/), and [flake8](https://flake8.pycqa.org/en/latest/) packages every time you do a `git commit`. To trigger the hook manually simply run `pre-commit run --all-files`.
+
+### Running the tests
+`smaug` is tested with `pytest` using the [pyln-testing](https://pypi.org/project/pyln-testing/) library.
+```
+pytest
+```
+
+> [!NOTE]
+> To be able to run the tests remember to first enter your development shell with `nix develop`, change into the the tests directory, and execute `poetry shell` if you haven't yet.
 
 ## Feedback
 Please [open an issue](https://github.com/chrisguida/smaug/issues/new/choose) if you have any questions or comments!

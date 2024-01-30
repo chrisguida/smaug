@@ -3,7 +3,7 @@ repos:
     rev: 23.12.1
     hooks:
       - id: black
-        args: [--target-version, py311]
+        args: ["--target-version", "py311", "--line-length", "79"]
         language_version: python3
         types: [python]
         files: ^(tests)/
@@ -12,7 +12,7 @@ repos:
     hooks:
       - id: isort
         args: ["--profile", "black", "--filter-files"]
-  # - repo: https://github.com/PyCQA/flake8
-  #   rev: 6.1.0
-  #   hooks:
-  #   - id: flake8
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.0.0
+    hooks:
+    - id: flake8
