@@ -865,6 +865,7 @@ dependencies = [
  "cln-rpc",
  "home",
  "log",
+ "miniscript",
  "serde",
  "serde_json",
  "tokio",

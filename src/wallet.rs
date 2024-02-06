@@ -17,9 +17,11 @@ use bitcoincore_rpc::{
 };
 use clap::{command, Parser};
 use cln_plugin::{Error, Plugin};
+use miniscript::Descriptor;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{collections::BTreeMap, fmt, path::PathBuf, time::Duration};
+use std::str::FromStr;
 
 use crate::state::State;
 
@@ -120,9 +122,9 @@ fn find_closest_lower_key(map: &BTreeMap<u32, BlockHash>, key: u32) -> Option<(u
 #[derive(Debug, Deserialize, Serialize, Clone, Parser)]
 #[command(author, version, about, long_about = None)]
 pub struct AddArgs {
-    /// External descriptor of wallet to add
+    /// External or multipath descriptor of wallet to add
     pub descriptor: String,
-    /// Internal descriptor of wallet to add
+    /// Optional internal descriptor of wallet to add
     pub change_descriptor: Option<String>,
     /// Birthday of wallet to add. Must be a block height between 0 and 4294967295
     pub birthday: Option<u32>,
@@ -167,9 +169,19 @@ impl DescriptorWallet {
     }
 
     pub fn from_args(args: AddArgs, network: String) -> Result<Self, WatchError> {
+        let mut descriptor = args.descriptor;
+        let mut change_descriptor = args.change_descriptor;
+        let descriptor_obj = Descriptor::from_str(&descriptor).unwrap();
+
+        if descriptor_obj.is_multipath() {
+            let descriptor_vec = descriptor_obj.clone().into_single_descriptors().unwrap();
+            descriptor = descriptor_vec[0].to_string();
+            change_descriptor = Some(descriptor_vec[1].to_string());
+        }
+
         Ok(Self {
-            descriptor: args.descriptor,
-            change_descriptor: args.change_descriptor,
+            descriptor: descriptor,
+            change_descriptor: change_descriptor,
             birthday: args.birthday,
             gap: args.gap,
             transactions: BTreeMap::new(),
