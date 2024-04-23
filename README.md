@@ -7,7 +7,7 @@ This enables businesses to design a complete treasury using [Miniscript](https:/
 
 ## Prerequsites
 - [`bitcoind`](https://github.com/bitcoin/bitcoin) with `scanblocks` RPC enabled (at least v24 and `blockfilterindex=1`)
-- [`lightningd`](https://github.com/elementsproject/lightning) (aka Core Lightning aka CLN), built from [this branch](https://github.com/niftynei/lightning/tree/nifty/onchain_notif). (This branch adds the two new custom notification topics we use for Smaug: `utxo_deposit` and `utxo_spent`)
+- [`lightningd`](https://github.com/elementsproject/lightning) (aka Core Lightning aka CLN), built from [this branch](https://github.com/chrisguida/lightning/tree/cguida/onchain_notif). (This branch adds the two new custom notification topics we use for Smaug: `utxo_deposit` and `utxo_spend`)
 
 I recommend [`nix-bitcoin`](https://nixbitcoin.org) with a config [something like this](https://github.com/chrisguida/nix-dell)
 - Obviously this is for mutinynet; if you want mainnet, edit your flake url to pull in the official nix-bitcoin repo)

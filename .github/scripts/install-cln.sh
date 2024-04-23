@@ -10,9 +10,9 @@ sudo apt-get install -y cargo rustfmt protobuf-compiler
 
 pip3 install mako
 
-git clone https://github.com/niftynei/lightning.git
+git clone https://github.com/chrisguida/lightning.git
 cd lightning
-git checkout nifty/onchain_notif
+git checkout cguida/onchain_notif
 
 pip3 install -r plugins/clnrest/requirements.txt
 pip3 install grpcio-tools
