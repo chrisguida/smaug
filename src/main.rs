@@ -67,12 +67,15 @@ async fn main() -> Result<(), anyhow::Error> {
             parse_command,
         )
         .subscribe("block_added", block_added_handler)
+        // .with_logging(true)
         .dynamic();
     let configured_plugin = if let Some(cp) = builder.configure().await? {
         cp
     } else {
         return Ok(());
     };
+    // log::info!("CLN_PLUGIN_LOG = {}", std::env::var("CLN_PLUGIN_LOG")?);
+    // log::info!("RUST_LOG = {}", std::env::var("RUST_LOG")?);
     log::debug!(
         "Configuration from CLN main daemon: {:?}",
         configured_plugin.configuration()

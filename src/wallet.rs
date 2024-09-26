@@ -109,6 +109,7 @@ pub fn parse_network(network: &Option<String>) -> Result<Network, Error> {
 }
 
 fn parse_currency(network: &Option<String>) -> Result<String, Error> {
+    log::info!("parsing network {:?} to currency", network);
     Ok(get_currency(parse_network(network)?))
 }
 
