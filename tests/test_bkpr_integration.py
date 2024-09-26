@@ -70,7 +70,7 @@ def test_bkpr_integration(ln_node, bitcoind):
     )
 
     # ## simple spend ## #
-    # 1 input which is ours (send utxo_spent for 100M sats)
+    # 1 input which is ours (send utxo_spend for 100M sats)
     # 2 outputs:
     #   1 which is the 10M sat spend (to an external account)
     #   (send utxo_deposit from our account to external)
@@ -83,7 +83,7 @@ def test_bkpr_integration(ln_node, bitcoind):
     # smaug wallet
     # this subtracts 1M sat (+141 sats for fee) from our bitcoind wallet
     # this will generate 3 more bkpr events for our smaug wallet:
-    # 1 utxo_spent for our input and 2 utxo_deposits for the outputs
+    # 1 utxo_spend for our input and 2 utxo_deposits for the outputs
     cln_addr = ln_node.rpc.newaddr()["bech32"]
     bitcoind.rpc.sendtoaddress(cln_addr, sats_to_btc(CLN_INITIAL_AMOUNT_SAT))
     generate()
@@ -102,8 +102,8 @@ def test_bkpr_integration(ln_node, bitcoind):
     # ## simple shared tx ## #
     # payjoin where we pay 10M sats from smaug (ours) to CLN (theirs)
     # 2 inputs
-    #   1 which is ours (89_999_859 sats) (send utxo_spent)
-    #   1 which is theirs (10M sats) (send utxo_spent)
+    #   1 which is ours (89_999_859 sats) (send utxo_spend)
+    #   1 which is theirs (10M sats) (send utxo_spend)
     # 2 outputs
     #   1 which is ours (79_998_859 sats)
     #   (utxo_deposit from our wallet to our wallet (basically change))

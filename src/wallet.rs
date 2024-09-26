@@ -26,7 +26,7 @@ use crate::state::State;
 pub const SMAUG_DATADIR: &str = ".smaug";
 
 pub const UTXO_DEPOSIT_TAG: &str = "utxo_deposit";
-pub const UTXO_SPENT_TAG: &str = "utxo_spent";
+pub const UTXO_SPEND_TAG: &str = "utxo_spend";
 
 /// Errors related to the `smaug` command.
 #[derive(Debug)]
@@ -420,7 +420,7 @@ impl DescriptorWallet {
                         let amount = po.value;
                         let outpoint = format!("{}", input.previous_output.to_string());
                         log::trace!("outpoint = {}", format!("{}", outpoint));
-                        let onchain_spend = json!({UTXO_SPENT_TAG: {
+                        let onchain_spend = json!({UTXO_SPEND_TAG: {
                             "account": acct,
                             "outpoint": outpoint,
                             "spending_txid": tx.tx_node.txid,
@@ -433,7 +433,7 @@ impl DescriptorWallet {
                         let cloned_plugin = plugin.clone();
                         tokio::spawn(async move {
                             if let Err(e) = cloned_plugin
-                                .send_custom_notification(UTXO_SPENT_TAG.to_string(), onchain_spend)
+                                .send_custom_notification(UTXO_SPEND_TAG.to_string(), onchain_spend)
                                 .await
                             {
                                 log::error!("Error sending custom notification: {:?}", e);
@@ -582,7 +582,7 @@ impl DescriptorWallet {
                         let amount = po.value;
                         let outpoint = format!("{}", input.previous_output.to_string());
                         log::trace!("outpoint = {}", format!("{}", outpoint));
-                        let onchain_spend = json!({UTXO_SPENT_TAG: {
+                        let onchain_spend = json!({UTXO_SPEND_TAG: {
                             "account": acct,
                             "outpoint": outpoint,
                             "spending_txid": tx.tx_node.txid.to_string(),
@@ -595,7 +595,7 @@ impl DescriptorWallet {
                         let cloned_plugin = plugin.clone();
                         tokio::spawn(async move {
                             if let Err(e) = cloned_plugin
-                                .send_custom_notification(UTXO_SPENT_TAG.to_string(), onchain_spend)
+                                .send_custom_notification(UTXO_SPEND_TAG.to_string(), onchain_spend)
                                 .await
                             {
                                 log::error!("Error sending custom notification: {:?}", e);
