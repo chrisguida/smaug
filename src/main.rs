@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use smaug::wallet::{AddArgs, DescriptorWallet, SMAUG_DATADIR, UTXO_DEPOSIT_TAG, UTXO_SPENT_TAG};
+use smaug::wallet::{AddArgs, DescriptorWallet, SMAUG_DATADIR, UTXO_DEPOSIT_TAG, UTXO_SPEND_TAG};
 
 use cln_plugin::{anyhow, messages, options, Builder, Error, Plugin};
 use tokio;
@@ -73,7 +73,7 @@ async fn main() -> Result<(), anyhow::Error> {
             "Bitcoind data directory (for cookie file access)",
         ))
         .notification(messages::NotificationTopic::new(UTXO_DEPOSIT_TAG))
-        .notification(messages::NotificationTopic::new(UTXO_SPENT_TAG))
+        .notification(messages::NotificationTopic::new(UTXO_SPEND_TAG))
         .rpcmethod(
             "smaug",
             "Watch one or more external wallet descriptors and emit notifications when coins are moved",

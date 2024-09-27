@@ -1,6 +1,5 @@
 target/
-result/
+result
 __pycache__/
 
 scratch
-

@@ -13,23 +13,8 @@
     ...
   }: utils.lib.eachDefaultSystem (system:
     let
-      cln-overlay = final: prev: {
-        clightning = prev.clightning.overrideAttrs {
-          version = "23.11";
-          src = prev.fetchFromGitHub {
-            owner = "niftynei";
-            repo = "lightning";
-            #rev = "44c5b523683160e8c20bda200c6a5a59ea40bc5e";
-            rev = "37ad798a02336a82460b865fd4e6a29d8880856c";
-            sha256 = "sha256-pkXU4JB5Y2oN/2DfYNRgGJdH36Nz3gmVfC/Exv2E2Zk=";
-            fetchSubmodules = true;
-          };
-        };
-      };
-
       pkgs = import nixpkgs {
         inherit system;
-        overlays = [ cln-overlay ];
       };
       naersk-lib = pkgs.callPackage naersk {};
     in rec {
@@ -39,7 +24,7 @@
       };
 
       devShell = pkgs.mkShell {
-        buildInputs = with pkgs; [ bash cargo rustc rustfmt pre-commit rustPackages.clippy pkg-config openssl bitcoin clightning poetry ];
+        buildInputs = with pkgs; [ bash bitcoin clightning cargo gawk libeatmydata openssl pkg-config poetry pre-commit rustc rustfmt rustPackages.clippy ];
         RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
         shellHook = ''
           echo "Entering devshell..."
@@ -50,9 +35,13 @@
           echo "mkdir -p ~/.bitcoin"
           echo ""
 
+          # Extract CLN zip file to a temporary directory
+          TMP_DIR=$(mktemp -d)
+          unzip -q ${pkgs.clightning.src} -d "$TMP_DIR"
+
           echo "Then to set up two lightning nodes and a bitcoin node in regtest mode,"
           echo "run the following two commands:"
-          echo "source ${pkgs.clightning.src}/contrib/startup_regtest.sh"
+          echo "source $TMP_DIR/clightning-v24.08.1/contrib/startup_regtest.sh"
           echo "start_ln"
           echo ""
 
