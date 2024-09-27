@@ -6,7 +6,7 @@ It utilizes [cln-plugin](https://docs.rs/cln-plugin/latest/cln_plugin/) and the 
 This enables businesses to design a complete treasury using [Miniscript](https://bitcoin.sipa.be/miniscript/) and import the resulting descriptor into CLN. Since bookkeeper already accounts for all coin movements internal to CLN, this plugin is the last piece businesses need in order to unify all their bitcoin accounting in one place. This enables businesses to account for all inflows and outflows from their operations, streamlining tax reporting and financial analysis.
 
 ## Prerequsites
-- [`bitcoind`](https://github.com/bitcoin/bitcoin) with `scanblocks` RPC enabled (at least v24 and `blockfilterindex=1`)
+- [`bitcoind`](https://github.com/bitcoin/bitcoin) with `scanblocks` RPC enabled (at least [v25](https://github.com/bitcoin-core/bitcoin-devwiki/wiki/25.0-Release-Candidate-Testing-Guide) and `blockfilterindex=1`)
 - [`lightningd`](https://github.com/elementsproject/lightning) (aka Core Lightning aka CLN), at least version v24.08
 
 I recommend [`nix-bitcoin`](https://nixbitcoin.org) with a config [something like this](https://github.com/chrisguida/nix-dell)
@@ -55,6 +55,8 @@ On NixOS with nix-bitcoin, you'll need to copy the binary somewhere your lightni
 sudo cp target/release/smaug /usr/bin/
 ```
 
+Alternatively, you can do `nix build`, which will install `smaug` into your nix store.
+
 ## Running
 
 To run `smaug`, first make sure `bitcoind` and `lightningd` are both running, and that `bitcoind`'s blockfilterindex has finished syncing.
@@ -74,6 +76,8 @@ plugin=/path/to/smaug
 smaug_brpc_user=<bitcoind rpc user>
 smaug_brpc_pass=<bitcoind rpc password>
 ```
+
+If you installed using `nix build`, you can grab the path to the binary from the nix store (`realpath <smaug source dir>/result/bin/smaug`) and then put `plugin=/nix/store/yhxflpqsqz2hwf0m444r7xsiv88g53yd-smaug-0.1.0/bin/smaug` (your hash will vary, this one probably won't work) into your configuration.nix in the `extraConfig` attribute of your CLN service config. Or, you can start it dynamically as detailed below.
 
 ## Usage
 Smaug has a pretty intuitive command line interface which utilizes the very nice `clap` crate:
@@ -101,6 +105,8 @@ To add a wallet to smaug, just do:
 ```
 lightning-cli smaug add "<external descriptor>" "<internal descriptor>"
 ```
+
+I usually create a wallet in [Sparrow Desktop Wallet](https://sparrowwallet.com/), then File->Export Wallet, then Output Descriptor. This will save the combined descriptor (not supported yet) as well as the separate receiving and change desctiptors in a txt file, which you can then simply copy and paste into your `smaug add` command.
 
 To try my mutinynet test wallet, do:
 ```
