@@ -122,11 +122,13 @@ async fn main() -> Result<(), anyhow::Error> {
             Some(sbp) => u16::try_from(sbp)?,
             None => match network.as_str() {
                 "regtest" => 18443,
+                "signet" | "mutinynet" => 38332,
                 _ => 8332,
             },
         },
         None => match network.as_str() {
             "regtest" => 18443,
+            "signet" | "mutinynet" => 38332,
             _ => 8332,
         },
     };
