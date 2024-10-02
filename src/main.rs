@@ -6,10 +6,11 @@ extern crate serde_json;
 
 use bdk::chain::tx_graph::CanonicalTx;
 use bdk::chain::ConfirmationTimeAnchor;
-use bitcoincore_rpc::Auth;
+// use bitcoincore_rpc::Auth;
+use bitcoincore_rpc::{Auth, Client, RpcApi};
 use clap::error::ErrorKind;
 use clap::{CommandFactory, Parser, Subcommand};
-use cln_rpc::model::DatastoreMode;
+use cln_rpc::model::requests::DatastoreMode;
 use cln_rpc::{
     model::requests::{DatastoreRequest, ListdatastoreRequest},
     ClnRpc, Request, Response,
@@ -86,21 +87,24 @@ async fn main() -> Result<(), anyhow::Error> {
     } else {
         return Ok(());
     };
-    log::debug!(
-        "Configuration from CLN main daemon: {:?}",
-        configured_plugin.configuration()
-    );
-    log::debug!(
-        "smaug_network = {:?}, cln_network = {}",
-        configured_plugin.option("smaug_network"),
-        configured_plugin.configuration().network
-    );
+    let cln_network = configured_plugin.configuration().network.clone();
+    if log::log_enabled!(log::Level::Debug) {
+        eprintln!(
+            "Configuration from CLN main daemon: {:?}",
+            configured_plugin.configuration()
+        );
+        eprintln!(
+            "smaug_network = {:?}, cln_network = {}",
+            configured_plugin.option("smaug_network").unwrap().as_str(),
+            &cln_network,
+        );
+    }
     let network = match configured_plugin.option("smaug_network") {
         Some(smaug_network) => match smaug_network.as_str() {
             Some(sn) => sn.to_owned(),
-            None => configured_plugin.configuration().network,
+            None => cln_network.clone(),
         },
-        None => configured_plugin.configuration().network,
+        None => cln_network.clone(),
     };
     let brpc_host = match configured_plugin.option("smaug_brpc_host") {
         Some(smaug_brpc_host) => match smaug_brpc_host.as_str() {
@@ -118,11 +122,13 @@ async fn main() -> Result<(), anyhow::Error> {
             Some(sbp) => u16::try_from(sbp)?,
             None => match network.as_str() {
                 "regtest" => 18443,
+                "signet" | "mutinynet" => 38332,
                 _ => 8332,
             },
         },
         None => match network.as_str() {
             "regtest" => 18443,
+            "signet" | "mutinynet" => 38332,
             _ => 8332,
         },
     };
@@ -144,23 +150,43 @@ async fn main() -> Result<(), anyhow::Error> {
     if let Auth::None = brpc_auth {
         if let Some(smaug_brpc_cookie_dir) = configured_plugin.option("smaug_brpc_cookie_dir") {
             if let Some(sbcd) = smaug_brpc_cookie_dir.as_str() {
-                brpc_auth = Auth::CookieFile(PathBuf::from(sbcd).join(".cookie"))
+                let cf_path = PathBuf::from(sbcd)
+                    .join(".cookie");
+                if !cf_path.exists() {
+                    return Err(anyhow!("Nonexistent cookie file specified in smaug_brpc_cookie_dir: {}", cf_path.display()));
+                }
+                brpc_auth = Auth::CookieFile(PathBuf::from(sbcd).join(".cookie"));
             } else {
-                if network == "regtest" {
-                    brpc_auth = Auth::CookieFile(
-                        home_dir()
-                            .expect("cannot determine home dir")
-                            .join(".bitcoin/regtest")
-                            .join(".cookie"),
-                    );
+                let cf_path = home_dir()
+                    .expect("cannot determine home dir")
+                    .join(format!(".bitcoin/{}", cln_network.clone()))
+                    .join(".cookie");
+                if cf_path.exists() {
+                    brpc_auth = Auth::CookieFile(cf_path);
                 }
             }
         }
     }
     if let Auth::None = brpc_auth {
         return Err(anyhow!("must specify either `smaug_bprc_cookie_dir` or `smaug_brpc_user` and `smaug_brpc_pass`"));
+    } else {
+        if log::log_enabled!(log::Level::Debug) {
+            eprintln!("using auth info: {:?}", brpc_auth);
+        }
+        let rpc_client = Client::new(
+            &format!("http://{}:{}", brpc_host.clone(), brpc_port.clone()),
+            brpc_auth.clone(),
+        )?;
+
+        let _ = match rpc_client.get_connection_count() {
+            Ok(cc) => cc,
+            Err(e) => {
+                return Err(anyhow!("Cannot connect to bitcoind, ensure your `smaug_bprc_cookie_dir` or `smaug_brpc_user` and `smaug_brpc_pass` are correct 
+                    and that your node is active and accepting rpc connections"))
+            },
+        };
     }
-    log::trace!("using auth info: {:?}", brpc_auth);
+
     let ln_dir: PathBuf = configured_plugin.configuration().lightning_dir.into();
     // Create data dir if it does not exist
     fs::create_dir_all(ln_dir.join(SMAUG_DATADIR)).unwrap_or_else(|e| {
