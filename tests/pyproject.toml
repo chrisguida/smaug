@@ -17,6 +17,7 @@ pre-commit = "^3.6.0"
 pyln-testing = "^24.8.2"
 pytest = "^7.1.2"
 pytest-timeout = "^2.1.0"
+pytest-xdist = "^3.6"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
