@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tests"
-version = "0.1.0"
+version = "0.1.1"
 description = "smaug tests"
 authors = ["Chris Guida <chrisguida@gmail.com>"]
 license = "MIT"
@@ -8,13 +8,12 @@ license = "MIT"
 [tool.poetry.dependencies]
 python = "^3.9"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 black = "^23.12.1"
 flake8 = "^7.0.0"
 isort = "^5.13.2"
-
 pre-commit = "^3.6.0"
-pyln-testing = "23.11"
+pyln-testing = "^24.11.1"
 pytest = "^7.1.2"
 pytest-timeout = "^2.1.0"
 
