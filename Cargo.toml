@@ -24,7 +24,7 @@ bdk = { git = "https://github.com/chrisguida/bdk", version = "1.0.0-alpha.2", re
 # bdk_file_store = { git = "https://github.com/bitcoindevkit/bdk", rev = "8f38e96e4542db2378e2e64cd9289638ee86ba1a" }
 bdk_file_store = { git = "https://github.com/chrisguida/bdk", rev = "cc32e69a12b8c30e571e6261a8b99dec2cef6ff5" }
 # bitcoincore-rpc = { path = "../rust-bitcoincore-rpc/client" }
-bitcoincore-rpc = { git = "https://github.com/chrisguida/rust-bitcoincore-rpc", branch = "feat/scanblocks" }
+bitcoincore-rpc = { git = "https://github.com/chrisguida/rust-bitcoincore-rpc", rev = "20fcea324b7a4665866148343ecc1796deb086ef" }
 clap = { version = "4.4.0", features = ["derive"] }
 cln-plugin = { git = "https://github.com/elementsproject/lightning", version = "0.1.4" }
 # cln-plugin = { path = "../../lightning/plugins" }
