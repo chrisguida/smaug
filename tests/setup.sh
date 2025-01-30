@@ -9,8 +9,6 @@ cargo_toml_path="$script_dir/../Cargo.toml"
 name=$(awk -F'=' '/^\[package\]/ { in_package = 1 } in_package && /name/ { gsub(/[" ]/, "", $2); print $2; exit }' "$cargo_toml_path")
 version=$(awk -F'=' '/^\[package\]/ { in_package = 1 } in_package && /version/ { gsub(/[" ]/, "", $2); print $2; exit }' "$cargo_toml_path")
 
-smaug_dir="/usr/local/libexec/c-lightning/plugins/smaug"
-
 get_platform_file_end() {
     machine=$(uname -m)
     kernel=$(uname -s)
@@ -56,12 +54,12 @@ fi
 
 # Extract the contents
 if [[ $archive_file == *.tar.gz ]]; then
-    if ! sudo tar -xzvf "$script_dir/$archive_file" -C "$smaug_dir"; then
+    if ! tar -xzvf "$script_dir/$archive_file" -C "$script_dir"; then
         echo "Error extracting the contents of $archive_file" >&2
         exit 1
     fi
 elif [[ $archive_file == *.zip ]]; then
-    if ! sudo unzip "$script_dir/$archive_file" -d "$smaug_dir"; then
+    if ! unzip "$script_dir/$archive_file" -d "$script_dir"; then
         echo "Error extracting the contents of $archive_file" >&2
         exit 1
     fi
