@@ -18,7 +18,7 @@ from pyln.testing.fixtures import (  # noqa: F401
 )
 from pyln.testing.utils import BITCOIND_CONFIG, write_config
 
-SMAUG_PLUGIN = Path.cwd().joinpath("../target/debug/smaug")
+SMAUG_PLUGIN = Path.cwd().joinpath("target/debug/smaug")
 
 
 # copied from https://github.com/elementsproject/lightning/blob/37ad798a02336a82460b865fd4e6a29d8880856c/contrib/pyln-testing/pyln/testing/fixtures.py#L127-L164  # noqa: E501
