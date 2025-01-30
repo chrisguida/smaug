@@ -38,3 +38,10 @@ serde_json = "1.0.72"
 [dependencies.tokio]
 features = ["net", "rt-multi-thread"]
 version = "1"
+
+[profile.optimized]
+inherits = "release"
+strip = "debuginfo"
+codegen-units = 1
+lto = "fat"
+debug = false
