@@ -81,7 +81,6 @@ def ln_node(node_factory):  # noqa: F811
     yield node_factory.get_nodes(
         1,
         opts={
-            "allow_broken_log": True,
             "plugin": SMAUG_PLUGIN,
             "smaug_brpc_user": BITCOIND_CONFIG["rpcuser"],
             "smaug_brpc_pass": BITCOIND_CONFIG["rpcpassword"],
