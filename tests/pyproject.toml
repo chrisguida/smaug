@@ -14,7 +14,7 @@ flake8 = "^7.0.0"
 isort = "^5.13.2"
 
 pre-commit = "^3.6.0"
-pyln-testing = "23.11"
+pyln-testing = "^24.8.2"
 pytest = "^7.1.2"
 pytest-timeout = "^2.1.0"
 
