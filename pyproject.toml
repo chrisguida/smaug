@@ -1,20 +1,21 @@
-[project]
+[tool.poetry]
 name = "tests"
 version = "0.1.1"
 description = "smaug tests"
-authors = [{ name = "Chris Guida", email = "chrisguida@gmail.com" }]
-license = { text = "MIT" }
-requires-python = ">=3.9,<4.0"  # Explicitly prevent Poetry from considering Python 4.0
-dependencies = [
-    "black>=23.12.1",
-    "flake8>=7.0.0",
-    "isort>=5.13.2",
-    "pre-commit>=3.6.0",
-    "pyln-testing>=24.8.2",
-    "pytest>=7.1.2",
-    "pytest-timeout>=2.1.0",
-    "pytest-xdist>=3.6"
-]
+authors = ["Chris Guida <chrisguida@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.9,<4.0"
+black = "^23.12.1"
+flake8 = "^7.0.0"
+isort = "^5.13.2"
+pre-commit = "^3.6.0"
+pyln-testing = "^24.8.2"
+pytest = "^7.1.2"
+pytest-timeout = "^2.1.0"
+pytest-xdist = "^3.6"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
