@@ -178,11 +178,18 @@ async fn main() -> Result<(), anyhow::Error> {
             brpc_auth.clone(),
         )?;
 
-        let _ = match rpc_client.get_connection_count() {
+        let _ = match rpc_client.scan_blocks_status() {
             Ok(cc) => cc,
             Err(e) => {
-                return Err(anyhow!("Cannot connect to bitcoind, ensure your `smaug_bprc_cookie_dir` or `smaug_brpc_user` and `smaug_brpc_pass` are correct 
-                    and that your node is active and accepting rpc connections"))
+                eprintln!("{}", e);
+                return Err(anyhow!(format!(
+                    "Cannot connect to bitcoind. Ensure your `smaug_bprc_cookie_dir`,\n\
+                     `smaug_brpc_user` and `smaug_brpc_pass` are correct,\n\
+                     and that your node is active and accepting RPC connections.\n
+                     Also make sure your version of bitcoind is at least v25,
+                     and that it has blockfilterindex=1 enabled in the config file,
+                     and that the block filter index has finished syncing."
+                )));
             },
         };
     }
