@@ -2,20 +2,18 @@
 
 set -e
 
+# Update package lists and install dependencies
 sudo apt-get update
-sudo apt-get install -y \
-  autoconf automake build-essential git libtool libsqlite3-dev \
-  python3 python3-pip net-tools zlib1g-dev libsodium-dev gettext
-sudo apt-get install -y cargo rustfmt protobuf-compiler
+sudo apt-get install -y wget tar
 
-pip3 install mako
+# Fetch the latest release tag from GitHub
+LATEST_TAG=$(wget -qO- https://api.github.com/repos/ElementsProject/lightning/releases/latest | grep '"tag_name"' | cut -d '"' -f 4)
 
-git clone https://github.com/elementsproject/lightning.git
-cd lightning
-git checkout v24.11.1
+# Download and extract the latest release binary
+wget https://github.com/ElementsProject/lightning/releases/download/$LATEST_TAG/clightning-$LATEST_TAG-Ubuntu-24.04-amd64.tar.xz
+sudo tar -xvf clightning-$LATEST_TAG-Ubuntu-24.04-amd64.tar.xz -C /usr/local --strip-components=2
 
-pip3 install grpcio-tools
+# Clean up
+test -f clightning-$LATEST_TAG-Ubuntu-24.04-amd64.tar.xz && rm clightning-$LATEST_TAG-Ubuntu-24.04-amd64.tar.xz
 
-./configure
-make -j$(nproc)
-sudo make install
+echo "c-lightning $LATEST_TAG installed successfully."
