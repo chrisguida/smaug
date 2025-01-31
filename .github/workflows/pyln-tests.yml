@@ -8,7 +8,7 @@ on:
 
 jobs:
   run-tests:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.11
@@ -31,10 +31,10 @@ jobs:
         run: cargo build
       - name: Run pyln tests
         timeout-minutes: 5
-        run: poetry run pytest -v
+        run: poetry run pytest -v -n 5
 
   pre-commit:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.11
