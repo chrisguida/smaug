@@ -2,6 +2,8 @@ name: "Build legacy Nix package on Ubuntu"
 
 on:
   push:
+    branches:
+      - master
 
 jobs:
   build:
