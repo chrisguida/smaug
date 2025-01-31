@@ -1,6 +1,6 @@
 [package]
 name = "smaug"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -26,7 +26,7 @@ bdk_file_store = { git = "https://github.com/chrisguida/bdk", rev = "cc32e69a12b
 # bitcoincore-rpc = { path = "../rust-bitcoincore-rpc/client" }
 bitcoincore-rpc = { git = "https://github.com/chrisguida/rust-bitcoincore-rpc", branch = "feat/scanblocks" }
 clap = { version = "4.4.0", features = ["derive"] }
-cln-plugin = { git = "https://github.com/elementsproject/lightning", version = "0.1.4" }
+cln-plugin = "=0.1.7"
 # cln-plugin = { path = "../../lightning/plugins" }
 # cln-plugin = { git = "https://github.com/chrisguida/lightning", version = "0.1.4", branch = "feat/cln-plugin-send-notifs" }
 cln-rpc = "0.2.0"

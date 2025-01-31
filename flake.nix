@@ -1,6 +1,7 @@
 {
   inputs = {
-    naersk.url = "github:nix-community/naersk/master";
+#    naersk.url = "github:nix-community/naersk/master"; # this can be uncommented when the below PR is merged
+    naersk.url = "github:nix-community/naersk?ref=fix-cargo-lock-v4"; # see https://github.com/nix-community/naersk/pull/344
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     utils.url = "github:numtide/flake-utils";
   };

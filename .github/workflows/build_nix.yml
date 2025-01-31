@@ -8,6 +8,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: cachix/install-nix-action@v24
+      - uses: cachix/install-nix-action@v30
       - name: Building package
         run: nix build --extra-experimental-features nix-command --extra-experimental-features flakes
