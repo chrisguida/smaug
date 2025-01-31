@@ -781,7 +781,7 @@ dependencies = [
 
 [[package]]
 name = "smaug"
-version = "0.1.1"
+version = "0.1.1-rc1"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
