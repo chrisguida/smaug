@@ -12,7 +12,7 @@ pip3 install mako
 
 git clone https://github.com/elementsproject/lightning.git
 cd lightning
-git checkout v24.08.1
+git checkout v24.11.1
 
 pip3 install grpcio-tools
 
