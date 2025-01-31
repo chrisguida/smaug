@@ -1,6 +1,6 @@
 [project]
 name = "tests"
-version = "0.1.0"
+version = "0.1.1"
 description = "smaug tests"
 authors = [{ name = "Chris Guida", email = "chrisguida@gmail.com" }]
 license = { text = "MIT" }
