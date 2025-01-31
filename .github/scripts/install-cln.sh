@@ -10,7 +10,7 @@ sudo apt-get install -y wget tar
 LATEST_TAG=$(wget -qO- https://api.github.com/repos/ElementsProject/lightning/releases/latest | grep '"tag_name"' | cut -d '"' -f 4)
 
 # Download and extract the latest release binary
-wget https://github.com/ElementsProject/lightning/releases/download/$LATEST_TAG/clightning-$LATEST_TAG-Ubuntu-24.04-amd64.tar.xz
+wget -q https://github.com/ElementsProject/lightning/releases/download/$LATEST_TAG/clightning-$LATEST_TAG-Ubuntu-24.04-amd64.tar.xz
 sudo tar -xvf clightning-$LATEST_TAG-Ubuntu-24.04-amd64.tar.xz -C /usr/local --strip-components=2
 
 # Clean up

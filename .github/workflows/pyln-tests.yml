@@ -23,7 +23,7 @@ jobs:
           poetry install --no-interaction
       - name: Install bitcoind
         env:
-          BITCOIN_VERSION: "26.0"
+          BITCOIN_VERSION: "28.1"
         run: .github/scripts/install-bitcoind.sh
       - name: Install CLN
         run: .github/scripts/install-cln.sh
