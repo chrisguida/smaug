@@ -10,6 +10,9 @@ use bdk::chain::ConfirmationTimeAnchor;
 use bitcoincore_rpc::{Auth, Client, RpcApi};
 use clap::error::ErrorKind;
 use clap::{CommandFactory, Parser, Subcommand};
+use cln_plugin::options::{
+    ConfigOption, DefaultStringConfigOption, IntegerConfigOption, StringConfigOption,
+};
 use cln_rpc::model::requests::DatastoreMode;
 use cln_rpc::{
     model::requests::{DatastoreRequest, ListdatastoreRequest},
@@ -28,11 +31,35 @@ use tokio::sync::Mutex;
 
 use smaug::wallet::{AddArgs, DescriptorWallet, SMAUG_DATADIR, UTXO_DEPOSIT_TAG, UTXO_SPEND_TAG};
 
-use cln_plugin::{anyhow, messages, options, Builder, Error, Plugin};
+use cln_plugin::{anyhow, messages, Builder, Error, Plugin};
 use tokio;
 
 use bdk::bitcoin::Transaction;
 use smaug::state::{Smaug, State};
+
+const OPT_SMAUG_NETWORK: StringConfigOption = ConfigOption::new_str_no_default(
+    "smaug_network",
+    "Which network to use: [bitcoin, testnet, signet, regtest, mutinynet]",
+);
+const OPT_SMAUG_BRPC_HOST: DefaultStringConfigOption = ConfigOption::new_str_with_default(
+    "smaug_brpc_host",
+    "127.0.0.1",
+    "Bitcoind RPC host (default 127.0.0.1)",
+);
+const OPT_SMAUG_BRPC_PORT: IntegerConfigOption =
+    ConfigOption::new_i64_no_default("smaug_brpc_port", "Bitcoind RPC port");
+const OPT_SMAUG_BRPC_USER: StringConfigOption = ConfigOption::new_str_no_default(
+    "smaug_brpc_user",
+    "Bitcoind RPC user (Required if cookie file unavailable)",
+);
+const OPT_SMAUG_BRPC_PASS: StringConfigOption = ConfigOption::new_str_no_default(
+    "smaug_brpc_pass",
+    "Bitcoind RPC password (Required if cookie file unavailable)",
+);
+const OPT_SMAUG_BRPC_COOKIE_DIR: StringConfigOption = ConfigOption::new_str_no_default(
+    "smaug_brpc_cookie_dir",
+    "Bitcoind data directory (for cookie file access)",
+);
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -43,36 +70,12 @@ async fn main() -> Result<(), anyhow::Error> {
         std::env::var("CLN_PLUGIN_LOG").unwrap_or_default()
     );
     let builder = Builder::new(tokio::io::stdin(), tokio::io::stdout())
-        .option(options::ConfigOption::new(
-            "smaug_network",
-            options::Value::OptString,
-            "Which network to use: [bitcoin, testnet, signet, regtest, mutinynet]",
-        ))
-        .option(options::ConfigOption::new(
-            "smaug_brpc_host",
-            options::Value::String("127.0.0.1".to_owned()),
-            "Bitcoind RPC host (default 127.0.0.1)",
-        ))
-        .option(options::ConfigOption::new(
-            "smaug_brpc_port",
-            options::Value::OptInteger,
-            "Bitcoind RPC port",
-        ))
-        .option(options::ConfigOption::new(
-            "smaug_brpc_user",
-            options::Value::OptString,
-            "Bitcoind RPC user (Required if cookie file unavailable)",
-        ))
-        .option(options::ConfigOption::new(
-            "smaug_brpc_pass",
-            options::Value::OptString,
-            "Bitcoind RPC password (Required if cookie file unavailable)",
-        ))
-        .option(options::ConfigOption::new(
-            "smaug_brpc_cookie_dir",
-            options::Value::OptString,
-            "Bitcoind data directory (for cookie file access)",
-        ))
+        .option(OPT_SMAUG_NETWORK)
+        .option(OPT_SMAUG_BRPC_HOST)
+        .option(OPT_SMAUG_BRPC_PORT)
+        .option(OPT_SMAUG_BRPC_USER)
+        .option(OPT_SMAUG_BRPC_PASS)
+        .option(OPT_SMAUG_BRPC_COOKIE_DIR)
         .notification(messages::NotificationTopic::new(UTXO_DEPOSIT_TAG))
         .notification(messages::NotificationTopic::new(UTXO_SPEND_TAG))
         .rpcmethod(
@@ -95,37 +98,17 @@ async fn main() -> Result<(), anyhow::Error> {
         );
         eprintln!(
             "smaug_network = {:?}, cln_network = {}",
-            configured_plugin.option("smaug_network").unwrap().as_str(),
+            configured_plugin.option(&OPT_SMAUG_NETWORK).unwrap(),
             &cln_network,
         );
     }
-    let network = match configured_plugin.option("smaug_network") {
-        Some(smaug_network) => match smaug_network.as_str() {
-            Some(sn) => sn.to_owned(),
-            None => cln_network.clone(),
-        },
+    let network = match configured_plugin.option(&OPT_SMAUG_NETWORK).unwrap() {
+        Some(smaug_network) => smaug_network.as_str().to_owned(),
         None => cln_network.clone(),
     };
-    let brpc_host = match configured_plugin.option("smaug_brpc_host") {
-        Some(smaug_brpc_host) => match smaug_brpc_host.as_str() {
-            Some(sbh) => sbh.to_owned(),
-            None => return Err(anyhow!("must specify smaug_brpc_host")),
-        },
-        None => {
-            return Err(anyhow!(
-                "must specify smaug_brpc_host (your bitcoind instance rpc host)"
-            ))
-        }
-    };
-    let brpc_port: u16 = match configured_plugin.option("smaug_brpc_port") {
-        Some(smaug_brpc_port) => match smaug_brpc_port.as_i64() {
-            Some(sbp) => u16::try_from(sbp)?,
-            None => match network.as_str() {
-                "regtest" => 18443,
-                "signet" | "mutinynet" => 38332,
-                _ => 8332,
-            },
-        },
+    let brpc_host = configured_plugin.option(&OPT_SMAUG_BRPC_HOST).unwrap();
+    let brpc_port: u16 = match configured_plugin.option(&OPT_SMAUG_BRPC_PORT).unwrap() {
+        Some(sbp) => u16::try_from(sbp)?,
         None => match network.as_str() {
             "regtest" => 18443,
             "signet" | "mutinynet" => 38332,
@@ -133,37 +116,37 @@ async fn main() -> Result<(), anyhow::Error> {
         },
     };
     let mut brpc_auth: Auth = Auth::None;
-    if let Some(bu_val) = configured_plugin.option("smaug_brpc_user") {
-        if let Some(sbu) = bu_val.as_str() {
-            if let Some(bs_val) = configured_plugin.option("smaug_brpc_pass") {
-                if let Some(sbp) = bs_val.as_str() {
-                    brpc_auth = Auth::UserPass(sbu.to_owned(), sbp.to_owned());
-                }
-            }
-            if let Auth::None = brpc_auth {
-                return Err(anyhow!(
-                    "specified `smaug_brpc_user` but did not specify `smaug_brpc_pass`"
-                ));
-            }
+    if let Some(bu_val) = configured_plugin.option(&OPT_SMAUG_BRPC_USER).unwrap() {
+        if let Some(bs_val) = configured_plugin.option(&OPT_SMAUG_BRPC_PASS).unwrap() {
+            brpc_auth = Auth::UserPass(bu_val, bs_val);
+        }
+        if let Auth::None = brpc_auth {
+            return Err(anyhow!(
+                "specified `smaug_brpc_user` but did not specify `smaug_brpc_pass`"
+            ));
         }
     }
+
     if let Auth::None = brpc_auth {
-        if let Some(smaug_brpc_cookie_dir) = configured_plugin.option("smaug_brpc_cookie_dir") {
-            if let Some(sbcd) = smaug_brpc_cookie_dir.as_str() {
-                let cf_path = PathBuf::from(sbcd)
-                    .join(".cookie");
-                if !cf_path.exists() {
-                    return Err(anyhow!("Nonexistent cookie file specified in smaug_brpc_cookie_dir: {}", cf_path.display()));
-                }
-                brpc_auth = Auth::CookieFile(PathBuf::from(sbcd).join(".cookie"));
-            } else {
-                let cf_path = home_dir()
-                    .expect("cannot determine home dir")
-                    .join(format!(".bitcoin/{}", cln_network.clone()))
-                    .join(".cookie");
-                if cf_path.exists() {
-                    brpc_auth = Auth::CookieFile(cf_path);
-                }
+        if let Some(smaug_brpc_cookie_dir) = configured_plugin
+            .option(&OPT_SMAUG_BRPC_COOKIE_DIR)
+            .unwrap()
+        {
+            let cf_path = PathBuf::from(&smaug_brpc_cookie_dir).join(".cookie");
+            if !cf_path.exists() {
+                return Err(anyhow!(
+                    "Nonexistent cookie file specified in smaug_brpc_cookie_dir: {}",
+                    cf_path.display()
+                ));
+            }
+            brpc_auth = Auth::CookieFile(PathBuf::from(&smaug_brpc_cookie_dir).join(".cookie"));
+        } else {
+            let cf_path = home_dir()
+                .expect("cannot determine home dir")
+                .join(format!(".bitcoin/{}", cln_network.clone()))
+                .join(".cookie");
+            if cf_path.exists() {
+                brpc_auth = Auth::CookieFile(cf_path);
             }
         }
     }
@@ -463,11 +446,9 @@ async fn delete(
 
     let removed_item = wallets.remove(&descriptor_name);
     let db_file_path = match removed_item {
-        Some(dw) => {
-            match dw.get_db_file_path(db_dir_path) {
-                Ok(dw) => dw,
-                Err(e) => return Err(e),
-            }
+        Some(dw) => match dw.get_db_file_path(db_dir_path) {
+            Ok(dw) => dw,
+            Err(e) => return Err(e),
         },
         None => return Err(anyhow!("Can't find wallet '{}'.", descriptor_name)),
     };

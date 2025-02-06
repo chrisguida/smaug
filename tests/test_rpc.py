@@ -190,7 +190,8 @@ def test_rpc_remove_failed(bitcoind, ln_node):
         ln_node.rpc.smaug("remove", "NONEXISTENT_WALLET")
     assert (
         "RPC call failed: method: smaug, payload: ('remove', "
-        "'NONEXISTENT_WALLET'), error: Can't find wallet 'NONEXISTENT_WALLET'."
+        "'NONEXISTENT_WALLET'), error: {'code': -32700, 'data': None, \
+'message': \"Can't find wallet 'NONEXISTENT_WALLET'.\"}"
         in str(e.value)
     )
 
