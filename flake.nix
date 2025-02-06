@@ -1,7 +1,7 @@
 {
   inputs = {
 #    naersk.url = "github:nix-community/naersk/master"; # this can be uncommented when the below PR is merged
-    naersk.url = "github:nix-community/naersk?ref=fix-cargo-lock-v4"; # see https://github.com/nix-community/naersk/pull/344
+    naersk.url = "github:terraform-industries/naersk?ref=lockfile-v4-unescaping"; # see https://github.com/nix-community/naersk/pull/344
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     utils.url = "github:numtide/flake-utils";
   };
@@ -25,11 +25,12 @@
       };
 
       devShell = pkgs.mkShell {
-        buildInputs = with pkgs; [ bash bitcoin clightning cargo gawk libeatmydata openssl pkg-config poetry pre-commit rustc rustfmt rustPackages.clippy ];
+        buildInputs = with pkgs; [
+          bash bitcoin clightning cargo gawk libeatmydata openssl pkg-config poetry pre-commit rustc rustfmt rustPackages.clippy
+        ];
         RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
         shellHook = ''
           echo "Entering devshell..."
-
           echo "Run \`cargo build\` to build \`smaug\`."
           echo ""
           echo "If this is your first time setting up smaug, run:"
@@ -42,7 +43,7 @@
 
           echo "Then to set up two lightning nodes and a bitcoin node in regtest mode,"
           echo "run the following two commands:"
-          echo "source $TMP_DIR/clightning-v24.08.1/contrib/startup_regtest.sh"
+          echo "source $TMP_DIR/clightning-v${pkgs.clightning.version}/contrib/startup_regtest.sh"
           echo "start_ln"
           echo ""
 
