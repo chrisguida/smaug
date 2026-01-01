@@ -29,8 +29,7 @@ def test_rpc_add(bitcoind, ln_node):
     wallet_name = wallet["name"]
 
     asserted = {
-        "message": f"Wallet with deterministic name {wallet_name} "
-        "successfully added",
+        "message": f"Wallet with deterministic name {wallet_name} successfully added",  # noqa: E501
         "name": wallet_name,
     }
 
@@ -186,14 +185,11 @@ def test_rpc_remove_failed(bitcoind, ln_node):
     assert os.path.isfile(db_file_path)
 
     # Try removing nonexistent wallet from smaug
-    with pytest.raises(RpcError) as e:
+    with pytest.raises(
+        RpcError,
+        match=r'RPC call failed: method: smaug, payload: \(\'remove\', \'NONEXISTENT_WALLET\'\), error: \{\'code\': -32700, \'data\': None, \'message\': "Can\'t find wallet \'NONEXISTENT_WALLET\'."\}',  # noqa: E501
+    ):
         ln_node.rpc.smaug("remove", "NONEXISTENT_WALLET")
-    assert (
-        "RPC call failed: method: smaug, payload: ('remove', "
-        "'NONEXISTENT_WALLET'), error: {'code': -32700, 'data': None, \
-'message': \"Can't find wallet 'NONEXISTENT_WALLET'.\"}"
-        in str(e.value)
-    )
 
     smaug_wallets = ln_node.rpc.smaug("ls")
     assert len(smaug_wallets) == 1

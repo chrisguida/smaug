@@ -10,8 +10,8 @@ def btc_to_sats(btc):
 
 
 def get_bitcoind_wallet_bal_sats(bitcoind):
-    wi_res = bitcoind.rpc.getwalletinfo()
-    return int(btc_to_sats(wi_res["balance"] + wi_res["immature_balance"]))
+    wi_res = bitcoind.rpc.getbalances()["mine"]
+    return int(btc_to_sats(wi_res["trusted"] + wi_res["immature"]))
 
 
 def get_bkpr_smaug_balance(name, bkpr_balances):
