@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.3] 2026-01-21
+
+### Changed
+
+- (tests) move python test deps to tests/ and switch to uv for reckless support
+
 ## [0.1.2] 2026-01-21
 
 ### Changed
