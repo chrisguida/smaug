@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2] 2026-01-21
+
+### Changed
+
+- upgrade cln-rpc and cln-plugin dependencies to 0.3
+- (tests) fix compatibility with CLN 25.x, Bitcoin Core 28.1+, and upstream plugins repo CI
+
 ## [0.1.1] 2025-01-31
 
 ### Fixed
