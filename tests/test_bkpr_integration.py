@@ -84,7 +84,7 @@ def test_bkpr_integration(ln_node, bitcoind):
     # this subtracts 1M sat (+141 sats for fee) from our bitcoind wallet
     # this will generate 3 more bkpr events for our smaug wallet:
     # 1 utxo_spend for our input and 2 utxo_deposits for the outputs
-    cln_addr = ln_node.rpc.newaddr()["bech32"]
+    cln_addr = ln_node.rpc.newaddr(addresstype="bech32")["bech32"]
     bitcoind.rpc.sendtoaddress(cln_addr, sats_to_btc(CLN_INITIAL_AMOUNT_SAT))
     generate()
     # now we should have 100_000_000 - 10_000_141 sats
@@ -127,7 +127,7 @@ def test_bkpr_integration(ln_node, bitcoind):
     # then grab CLN's 10_000_000 sat output
     cln_utxo = only_one(ln_node.rpc.listfunds()["outputs"])
     assert cln_utxo["amount_msat"] == CLN_INITIAL_AMOUNT_MSAT
-    cln_addr = ln_node.rpc.newaddr()["bech32"]
+    cln_addr = ln_node.rpc.newaddr(addresstype="bech32")["bech32"]
     btc_addr = bitcoind.rpc.getnewaddress()
 
     # total inputs = 10_000_000 + 89_999_859 = 99_999_859

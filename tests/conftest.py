@@ -83,5 +83,6 @@ def ln_node(node_factory):  # noqa: F811
             "smaug_brpc_user": BITCOIND_CONFIG["rpcuser"],
             "smaug_brpc_pass": BITCOIND_CONFIG["rpcpassword"],
             "smaug_brpc_port": BITCOIND_CONFIG["rpcport"],
+            "log-level": ["trace", "info:plugin-bookkeeper"],
         },
     )[0]
