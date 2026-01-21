@@ -1,0 +1,15 @@
+[project]
+name = "smaug"
+version = "0.1.0"
+requires-python = ">=3.9.2"
+description = "python dependencies for running tests"
+
+[dependency-groups]
+dev = [
+    "pytest>=7.4,<9",
+    "pytest-xdist>=3.6,<4",
+    "pytest-timeout>=2.4,<3",
+    "pyln-testing>=25.12",
+    "pyln-client>=25.12",
+    "pyln-proto>=25.12",
+]
