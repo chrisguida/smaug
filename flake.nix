@@ -26,7 +26,7 @@
 
       devShell = pkgs.mkShell {
         buildInputs = with pkgs; [
-          bash bitcoin clightning cargo gawk libeatmydata openssl pkg-config poetry pre-commit rustc rustfmt rustPackages.clippy
+          bash bitcoin clightning cargo gawk libeatmydata openssl pkg-config uv pre-commit rustc rustfmt rustPackages.clippy
         ];
         RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
         shellHook = ''

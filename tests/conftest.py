@@ -8,8 +8,9 @@ from pyln.testing.utils import BITCOIND_CONFIG, write_config
 
 # Define utility paths
 RUST_PROFILE = os.environ.get("RUST_PROFILE", "debug")
-COMPILED_PATH = Path.cwd() / "target" / RUST_PROFILE / "smaug"
-DOWNLOAD_PATH = Path.cwd() / "tests" / "smaug"
+PROJECT_ROOT = Path(__file__).parent.parent
+COMPILED_PATH = PROJECT_ROOT / "target" / RUST_PROFILE / "smaug"
+DOWNLOAD_PATH = Path(__file__).parent / "smaug"
 
 
 def get_plugin():
