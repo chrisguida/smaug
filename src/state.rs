@@ -25,6 +25,11 @@ pub struct Smaug {
     pub brpc_auth: Auth,
     /// The db path relevant to our wallets
     pub db_dir: PathBuf,
+    /// Whether the plugin is configured with bitcoind credentials.
+    /// If false, RPC methods will return helpful error messages.
+    pub configured: bool,
+    /// Help message to display when not configured.
+    pub unconfigured_message: Option<String>,
 }
 
 impl Smaug {
@@ -36,6 +41,8 @@ impl Smaug {
             brpc_port: 8332,
             brpc_auth: Auth::None,
             db_dir: PathBuf::new(),
+            configured: true,
+            unconfigured_message: None,
         }
     }
 

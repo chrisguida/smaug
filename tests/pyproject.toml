@@ -13,3 +13,8 @@ dev = [
     "pyln-client>=25.12",
     "pyln-proto>=25.12",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "manual: marks tests that run real bitcoind/lightningd (run with: pytest -m manual)",
+]

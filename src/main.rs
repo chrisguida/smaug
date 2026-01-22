@@ -6,7 +6,6 @@ extern crate serde_json;
 
 use bdk::chain::tx_graph::CanonicalTx;
 use bdk::chain::ConfirmationTimeAnchor;
-// use bitcoincore_rpc::Auth;
 use bitcoincore_rpc::{Auth, Client, RpcApi};
 use clap::error::ErrorKind;
 use clap::{CommandFactory, Parser, Subcommand};
@@ -18,7 +17,6 @@ use cln_rpc::{
     model::requests::{DatastoreRequest, ListdatastoreRequest},
     ClnRpc, Request, Response,
 };
-use home::home_dir;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -29,6 +27,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use smaug::brpc_auth::{detect_brpc_config, DetectionResult};
 use smaug::wallet::{AddArgs, DescriptorWallet, SMAUG_DATADIR, UTXO_DEPOSIT_TAG, UTXO_SPEND_TAG};
 
 use cln_plugin::{anyhow, messages, Builder, Error, Plugin};
@@ -106,69 +105,81 @@ async fn main() -> Result<(), anyhow::Error> {
         Some(smaug_network) => smaug_network.as_str().to_owned(),
         None => cln_network.clone(),
     };
+
+    // Get plugin options for credential detection
     let brpc_host = configured_plugin.option(&OPT_SMAUG_BRPC_HOST).unwrap();
-    let brpc_port: u16 = match configured_plugin.option(&OPT_SMAUG_BRPC_PORT).unwrap() {
-        Some(sbp) => u16::try_from(sbp)?,
-        None => match network.as_str() {
-            "regtest" => 18443,
-            "signet" | "mutinynet" => 38332,
-            _ => 8332,
-        },
+    let brpc_port_opt = configured_plugin.option(&OPT_SMAUG_BRPC_PORT).unwrap();
+    let brpc_user_opt = configured_plugin.option(&OPT_SMAUG_BRPC_USER).unwrap();
+    let brpc_pass_opt = configured_plugin.option(&OPT_SMAUG_BRPC_PASS).unwrap();
+    let brpc_cookie_dir_opt = configured_plugin.option(&OPT_SMAUG_BRPC_COOKIE_DIR).unwrap();
+
+    let rpc_file = configured_plugin.configuration().rpc_file.clone();
+    let rpc_path = Path::new(&rpc_file);
+
+    // Detect bitcoind RPC credentials using the new auto-detection module
+    let detection_result = detect_brpc_config(
+        &brpc_host,
+        brpc_port_opt,
+        brpc_user_opt,
+        brpc_pass_opt,
+        brpc_cookie_dir_opt,
+        &network,
+        rpc_path,
+    )
+    .await?;
+
+    // Handle configured vs unconfigured state
+    let (brpc_port, brpc_auth, configured, unconfigured_message) = match detection_result {
+        DetectionResult::Configured(config) => {
+            if log::log_enabled!(log::Level::Debug) {
+                eprintln!("using auth info: {:?}", config.auth);
+            }
+
+            // Verify connection to bitcoind
+            let rpc_client = Client::new(
+                &format!("http://{}:{}", config.host, config.port),
+                config.auth.clone(),
+            )?;
+
+            match rpc_client.get_connection_count() {
+                Ok(_) => {
+                    log::info!("Successfully connected to bitcoind");
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Cannot connect to bitcoind: {}. \
+                        Ensure bitcoind is running and credentials are correct.",
+                        e
+                    );
+                    // Still allow plugin to start, but mark as unconfigured
+                    let msg = format!(
+                        "Cannot connect to bitcoind: {}. \
+                        Please ensure bitcoind is running and accepting RPC connections.",
+                        e
+                    );
+                    return Ok(start_unconfigured(
+                        configured_plugin,
+                        network,
+                        brpc_host,
+                        msg,
+                    )
+                    .await?);
+                }
+            }
+
+            (config.port, config.auth, true, None)
+        }
+        DetectionResult::Unconfigured(message) => {
+            log::warn!("Starting smaug in unconfigured mode - no bitcoind credentials found");
+            return Ok(start_unconfigured(
+                configured_plugin,
+                network,
+                brpc_host,
+                message,
+            )
+            .await?);
+        }
     };
-    let mut brpc_auth: Auth = Auth::None;
-    if let Some(bu_val) = configured_plugin.option(&OPT_SMAUG_BRPC_USER).unwrap() {
-        if let Some(bs_val) = configured_plugin.option(&OPT_SMAUG_BRPC_PASS).unwrap() {
-            brpc_auth = Auth::UserPass(bu_val, bs_val);
-        }
-        if let Auth::None = brpc_auth {
-            return Err(anyhow!(
-                "specified `smaug_brpc_user` but did not specify `smaug_brpc_pass`"
-            ));
-        }
-    }
-
-    if let Auth::None = brpc_auth {
-        if let Some(smaug_brpc_cookie_dir) = configured_plugin
-            .option(&OPT_SMAUG_BRPC_COOKIE_DIR)
-            .unwrap()
-        {
-            let cf_path = PathBuf::from(&smaug_brpc_cookie_dir).join(".cookie");
-            if !cf_path.exists() {
-                return Err(anyhow!(
-                    "Nonexistent cookie file specified in smaug_brpc_cookie_dir: {}",
-                    cf_path.display()
-                ));
-            }
-            brpc_auth = Auth::CookieFile(PathBuf::from(&smaug_brpc_cookie_dir).join(".cookie"));
-        } else {
-            let cf_path = home_dir()
-                .expect("cannot determine home dir")
-                .join(format!(".bitcoin/{}", cln_network.clone()))
-                .join(".cookie");
-            if cf_path.exists() {
-                brpc_auth = Auth::CookieFile(cf_path);
-            }
-        }
-    }
-    if let Auth::None = brpc_auth {
-        return Err(anyhow!("must specify either `smaug_bprc_cookie_dir` or `smaug_brpc_user` and `smaug_brpc_pass`"));
-    } else {
-        if log::log_enabled!(log::Level::Debug) {
-            eprintln!("using auth info: {:?}", brpc_auth);
-        }
-        let rpc_client = Client::new(
-            &format!("http://{}:{}", brpc_host.clone(), brpc_port.clone()),
-            brpc_auth.clone(),
-        )?;
-
-        let _ = match rpc_client.get_connection_count() {
-            Ok(cc) => cc,
-            Err(e) => {
-                return Err(anyhow!("Cannot connect to bitcoind, ensure your `smaug_bprc_cookie_dir` or `smaug_brpc_user` and `smaug_brpc_pass` are correct 
-                    and that your node is active and accepting rpc connections"))
-            },
-        };
-    }
 
     let ln_dir: PathBuf = configured_plugin.configuration().lightning_dir.into();
     // Create data dir if it does not exist
@@ -218,9 +229,11 @@ async fn main() -> Result<(), anyhow::Error> {
         wallets,
         network: network.clone(),
         brpc_host: brpc_host.clone(),
-        brpc_port: brpc_port.clone(),
+        brpc_port,
         brpc_auth: brpc_auth.clone(),
         db_dir: ln_dir.join(SMAUG_DATADIR),
+        configured,
+        unconfigured_message,
     };
     let plugin_state = Arc::new(Mutex::new(watch_descriptor.clone()));
     log::trace!("getting lock on state");
@@ -230,6 +243,40 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let plugin = configured_plugin.start(plugin_state).await?;
     log::info!("Smaug started");
+    plugin.join().await
+}
+
+/// Starts the plugin in unconfigured mode with no bitcoind connection.
+/// RPC calls will return helpful error messages until properly configured.
+async fn start_unconfigured(
+    configured_plugin: cln_plugin::ConfiguredPlugin<State, tokio::io::Stdin, tokio::io::Stdout>,
+    network: String,
+    brpc_host: String,
+    message: String,
+) -> Result<(), anyhow::Error> {
+    let ln_dir: PathBuf = configured_plugin.configuration().lightning_dir.into();
+
+    // Create data dir if it does not exist
+    fs::create_dir_all(ln_dir.join(SMAUG_DATADIR)).unwrap_or_else(|e| {
+        log::error!("Cannot create data dir: {e:?}");
+        std::process::exit(1);
+    });
+
+    let watch_descriptor = Smaug {
+        wallets: BTreeMap::new(),
+        network,
+        brpc_host,
+        brpc_port: 0,
+        brpc_auth: Auth::None,
+        db_dir: ln_dir.join(SMAUG_DATADIR),
+        configured: false,
+        unconfigured_message: Some(message),
+    };
+
+    let plugin_state = Arc::new(Mutex::new(watch_descriptor));
+    log::info!("Smaug started in UNCONFIGURED mode - RPC calls will return setup instructions");
+
+    let plugin = configured_plugin.start(plugin_state).await?;
     plugin.join().await
 }
 
@@ -272,6 +319,22 @@ async fn parse_command(
     plugin: Plugin<State>,
     v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
+    // Check if plugin is configured before processing any command
+    {
+        let state = plugin.state().lock().await;
+        if !state.configured {
+            let message = state
+                .unconfigured_message
+                .clone()
+                .unwrap_or_else(|| "Smaug is not configured with bitcoind credentials.".to_string());
+            return Ok(json!({
+                "error": "not_configured",
+                "message": message,
+                "format-hint": "simple",
+            }));
+        }
+    }
+
     let arg_vec = match v.clone() {
         serde_json::Value::Array(a) => a,
         _ => {
@@ -474,6 +537,16 @@ async fn delete(
 
 async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Result<(), Error> {
     log::trace!("Got a block_added notification: {}", v);
+
+    // Skip processing if plugin is not configured
+    {
+        let state = plugin.state().lock().await;
+        if !state.configured {
+            log::trace!("Skipping block_added handler - plugin not configured");
+            return Ok(());
+        }
+    }
+
     log::trace!(
         "Smaug state!!! {:?}",
         plugin.state().lock().await.wallets.clone()
@@ -483,7 +556,7 @@ async fn block_added_handler(plugin: Plugin<State>, v: serde_json::Value) -> Res
         (
             state.db_dir.clone(),
             state.brpc_host.clone(),
-            state.brpc_port.clone(),
+            state.brpc_port,
             state.brpc_auth.clone(),
         )
     };
