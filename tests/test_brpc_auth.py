@@ -190,12 +190,14 @@ def manual_test_dirs():
     lightning_dir = tempfile.mkdtemp(prefix="smaug-test-lightning-")
     rpcport = get_free_port()
     p2p_port = get_free_port()
+    ln_port = get_free_port()
 
     yield {
         "bitcoin": bitcoin_dir,
         "lightning": lightning_dir,
         "rpcport": rpcport,
         "p2p_port": p2p_port,
+        "ln_port": ln_port,
     }
 
     # Cleanup
@@ -217,6 +219,7 @@ def test_cookie_file_auth(manual_test_dirs):
     lightning_dir = manual_test_dirs["lightning"]
     rpcport = manual_test_dirs["rpcport"]
     p2p_port = manual_test_dirs["p2p_port"]
+    ln_port = manual_test_dirs["ln_port"]
     log_file = Path(lightning_dir) / "lightningd.log"
 
     # Start bitcoind without rpcuser/rpcpassword (uses cookie auth)
@@ -274,6 +277,7 @@ def test_cookie_file_auth(manual_test_dirs):
             f"--lightning-dir={lightning_dir}",
             f"--bitcoin-datadir={bitcoin_dir}",
             f"--bitcoin-rpcport={rpcport}",
+            f"--addr=0.0.0.0:{ln_port}",
             f"--plugin={COMPILED_PATH}",
             f"--smaug_brpc_cookie_dir={bitcoin_dir}/regtest",
             f"--smaug_brpc_port={rpcport}",
@@ -471,6 +475,7 @@ def test_standard_cookie_path_detection(manual_test_dirs):
     lightning_dir = manual_test_dirs["lightning"]
     rpcport = manual_test_dirs["rpcport"]
     p2p_port = manual_test_dirs["p2p_port"]
+    ln_port = manual_test_dirs["ln_port"]
     log_file = Path(lightning_dir) / "lightningd.log"
 
     fake_home = tempfile.mkdtemp(prefix="smaug-test-home-")
@@ -535,6 +540,7 @@ def test_standard_cookie_path_detection(manual_test_dirs):
                 f"--lightning-dir={lightning_dir}",
                 f"--bitcoin-datadir={fake_bitcoin_dir}",
                 f"--bitcoin-rpcport={rpcport}",
+                f"--addr=0.0.0.0:{ln_port}",
                 f"--plugin={COMPILED_PATH}",
                 "--daemon",
                 f"--log-file={log_file}",
