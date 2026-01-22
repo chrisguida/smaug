@@ -38,14 +38,6 @@ pub enum WatchError {
     InvalidFormat(String),
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-struct RpcConnection {
-    pub host: String,
-    pub port: u16,
-    pub user: String,
-    pub pass: String,
-}
-
 impl std::error::Error for WatchError {}
 
 impl std::fmt::Display for WatchError {
