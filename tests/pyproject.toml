@@ -12,6 +12,7 @@ dev = [
     "pyln-testing>=25.12",
     "pyln-client>=25.12",
     "pyln-proto>=25.12",
+    "black>=24.0",
 ]
 
 [tool.pytest.ini_options]
