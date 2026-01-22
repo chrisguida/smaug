@@ -18,14 +18,23 @@ Detection priority order:
 
 import os
 import shutil
+import socket
 import subprocess
 import tempfile
 import time
 from pathlib import Path
 
 import pytest
-from pyln.testing.fixtures import *  # noqa: F403
+from pyln.testing.fixtures import *  # noqa: F401, F403
 from pyln.testing.utils import BITCOIND_CONFIG
+
+
+def get_free_port():
+    """Get a free port number."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        return s.getsockname()[1]
+
 
 # Define utility paths
 RUST_PROFILE = os.environ.get("RUST_PROFILE", "debug")
@@ -61,7 +70,9 @@ def test_explicit_smaug_config(node_factory, bitcoind):
     result = l1.rpc.call("smaug", ["ls"])
 
     assert isinstance(result, dict)
-    assert "error" not in result or "not_configured" not in result.get("error", "")
+    assert "error" not in result or "not_configured" not in result.get(
+        "error", ""
+    )
 
 
 def test_listconfigs_fallback(node_factory, bitcoind):
@@ -79,7 +90,9 @@ def test_listconfigs_fallback(node_factory, bitcoind):
     result = l1.rpc.call("smaug", ["ls"])
 
     assert isinstance(result, dict)
-    assert "error" not in result or "not_configured" not in result.get("error", "")
+    assert "error" not in result or "not_configured" not in result.get(
+        "error", ""
+    )
 
 
 # =============================================================================
@@ -88,13 +101,17 @@ def test_listconfigs_fallback(node_factory, bitcoind):
 # =============================================================================
 
 
-def wait_for_bitcoind(datadir, timeout=30):
+def wait_for_bitcoind(datadir, rpcport=None, timeout=30):
     """Wait for bitcoind to be ready."""
     start = time.time()
     while time.time() - start < timeout:
         try:
+            cmd = ["bitcoin-cli", "-regtest", f"-datadir={datadir}"]
+            if rpcport:
+                cmd.append(f"-rpcport={rpcport}")
+            cmd.append("getblockchaininfo")
             result = subprocess.run(
-                ["bitcoin-cli", "-regtest", f"-datadir={datadir}", "getblockchaininfo"],
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=5,
@@ -131,11 +148,15 @@ def wait_for_lightningd(lightning_dir, timeout=30):
     return False
 
 
-def stop_bitcoind(datadir):
+def stop_bitcoind(datadir, rpcport=None):
     """Stop bitcoind gracefully."""
     try:
+        cmd = ["bitcoin-cli", "-regtest", f"-datadir={datadir}"]
+        if rpcport:
+            cmd.append(f"-rpcport={rpcport}")
+        cmd.append("stop")
         subprocess.run(
-            ["bitcoin-cli", "-regtest", f"-datadir={datadir}", "stop"],
+            cmd,
             capture_output=True,
             timeout=10,
         )
@@ -164,15 +185,24 @@ def stop_lightningd(lightning_dir):
 
 @pytest.fixture
 def manual_test_dirs():
-    """Create temporary directories for manual testing."""
+    """Create temp directories and allocate unique ports for manual tests."""
     bitcoin_dir = tempfile.mkdtemp(prefix="smaug-test-bitcoin-")
     lightning_dir = tempfile.mkdtemp(prefix="smaug-test-lightning-")
+    rpcport = get_free_port()
+    p2p_port = get_free_port()
+    ln_port = get_free_port()
 
-    yield {"bitcoin": bitcoin_dir, "lightning": lightning_dir}
+    yield {
+        "bitcoin": bitcoin_dir,
+        "lightning": lightning_dir,
+        "rpcport": rpcport,
+        "p2p_port": p2p_port,
+        "ln_port": ln_port,
+    }
 
     # Cleanup
     stop_lightningd(lightning_dir)
-    stop_bitcoind(bitcoin_dir)
+    stop_bitcoind(bitcoin_dir, rpcport)
     time.sleep(1)
     shutil.rmtree(bitcoin_dir, ignore_errors=True)
     shutil.rmtree(lightning_dir, ignore_errors=True)
@@ -187,15 +217,20 @@ def test_cookie_file_auth(manual_test_dirs):
     """
     bitcoin_dir = manual_test_dirs["bitcoin"]
     lightning_dir = manual_test_dirs["lightning"]
+    rpcport = manual_test_dirs["rpcport"]
+    p2p_port = manual_test_dirs["p2p_port"]
+    ln_port = manual_test_dirs["ln_port"]
     log_file = Path(lightning_dir) / "lightningd.log"
 
     # Start bitcoind without rpcuser/rpcpassword (uses cookie auth)
-    print(f"\nStarting bitcoind with cookie auth in {bitcoin_dir}")
+    print(f"\nStarting bitcoind (cookie auth) in {bitcoin_dir}")
     subprocess.Popen(
         [
             "bitcoind",
             "-regtest",
             f"-datadir={bitcoin_dir}",
+            f"-rpcport={rpcport}",
+            f"-port={p2p_port}",
             "-fallbackfee=0.0001",
             "-daemon",
         ],
@@ -203,7 +238,7 @@ def test_cookie_file_auth(manual_test_dirs):
         stderr=subprocess.PIPE,
     )
 
-    assert wait_for_bitcoind(bitcoin_dir), "bitcoind failed to start"
+    assert wait_for_bitcoind(bitcoin_dir, rpcport), "bitcoind failed to start"
 
     cookie_path = Path(bitcoin_dir) / "regtest" / ".cookie"
     assert cookie_path.exists(), f"Cookie file not found at {cookie_path}"
@@ -211,11 +246,25 @@ def test_cookie_file_auth(manual_test_dirs):
 
     # Generate blocks
     subprocess.run(
-        ["bitcoin-cli", "-regtest", f"-datadir={bitcoin_dir}", "createwallet", "test"],
+        [
+            "bitcoin-cli",
+            "-regtest",
+            f"-datadir={bitcoin_dir}",
+            f"-rpcport={rpcport}",
+            "createwallet",
+            "test",
+        ],
         capture_output=True,
     )
     subprocess.run(
-        ["bitcoin-cli", "-regtest", f"-datadir={bitcoin_dir}", "-generate", "101"],
+        [
+            "bitcoin-cli",
+            "-regtest",
+            f"-datadir={bitcoin_dir}",
+            f"-rpcport={rpcport}",
+            "-generate",
+            "101",
+        ],
         capture_output=True,
     )
 
@@ -227,8 +276,12 @@ def test_cookie_file_auth(manual_test_dirs):
             "--network=regtest",
             f"--lightning-dir={lightning_dir}",
             f"--bitcoin-datadir={bitcoin_dir}",
+            f"--bitcoin-rpcport={rpcport}",
+            f"--addr=0.0.0.0:{ln_port}",
+            "--disable-plugin=cln-grpc",
             f"--plugin={COMPILED_PATH}",
             f"--smaug_brpc_cookie_dir={bitcoin_dir}/regtest",
+            f"--smaug_brpc_port={rpcport}",
             "--daemon",
             f"--log-file={log_file}",
         ],
@@ -236,7 +289,11 @@ def test_cookie_file_auth(manual_test_dirs):
         stderr=subprocess.PIPE,
     )
 
-    assert wait_for_lightningd(lightning_dir), "lightningd failed to start"
+    if not wait_for_lightningd(lightning_dir):
+        # Print log file for debugging
+        if log_file.exists():
+            print(f"=== lightningd.log ===\n{log_file.read_text()}\n===")
+        assert False, "lightningd failed to start"
 
     result = subprocess.run(
         [
@@ -252,7 +309,9 @@ def test_cookie_file_auth(manual_test_dirs):
 
     print(f"smaug ls output: {result.stdout}")
     assert result.returncode == 0, f"smaug ls failed: {result.stderr}"
-    assert "not_configured" not in result.stdout, "smaug reports not configured"
+    assert (
+        "not_configured" not in result.stdout
+    ), "smaug reports not configured"
     print("SUCCESS: Cookie file authentication works!")
 
 
@@ -261,25 +320,43 @@ def test_user_without_pass_fails(manual_test_dirs):
     """Test that specifying user without password fails with clear error."""
     bitcoin_dir = manual_test_dirs["bitcoin"]
     lightning_dir = manual_test_dirs["lightning"]
+    rpcport = manual_test_dirs["rpcport"]
+    p2p_port = manual_test_dirs["p2p_port"]
 
-    print(f"\nStarting bitcoind in {bitcoin_dir}")
+    print(f"\nStarting bitcoind in {bitcoin_dir} (rpcport={rpcport})")
     subprocess.Popen(
         [
             "bitcoind",
             "-regtest",
             f"-datadir={bitcoin_dir}",
+            f"-rpcport={rpcport}",
+            f"-port={p2p_port}",
             "-fallbackfee=0.0001",
             "-daemon",
         ],
     )
-    assert wait_for_bitcoind(bitcoin_dir), "bitcoind failed to start"
+    assert wait_for_bitcoind(bitcoin_dir, rpcport), "bitcoind failed to start"
 
     subprocess.run(
-        ["bitcoin-cli", "-regtest", f"-datadir={bitcoin_dir}", "createwallet", "test"],
+        [
+            "bitcoin-cli",
+            "-regtest",
+            f"-datadir={bitcoin_dir}",
+            f"-rpcport={rpcport}",
+            "createwallet",
+            "test",
+        ],
         capture_output=True,
     )
     subprocess.run(
-        ["bitcoin-cli", "-regtest", f"-datadir={bitcoin_dir}", "-generate", "101"],
+        [
+            "bitcoin-cli",
+            "-regtest",
+            f"-datadir={bitcoin_dir}",
+            f"-rpcport={rpcport}",
+            "-generate",
+            "101",
+        ],
         capture_output=True,
     )
 
@@ -291,6 +368,7 @@ def test_user_without_pass_fails(manual_test_dirs):
                 "--network=regtest",
                 f"--lightning-dir={lightning_dir}",
                 f"--bitcoin-datadir={bitcoin_dir}",
+                f"--bitcoin-rpcport={rpcport}",
                 f"--plugin={COMPILED_PATH}",
                 "--smaug_brpc_user=testuser",
             ],
@@ -307,9 +385,9 @@ def test_user_without_pass_fails(manual_test_dirs):
             output += e.stderr.decode()
 
     print(f"lightningd output: {output}")
-    assert "smaug_brpc_pass" in output, (
-        f"Expected error about missing smaug_brpc_pass, got: {output}"
-    )
+    assert (
+        "smaug_brpc_pass" in output
+    ), f"Expected error about missing smaug_brpc_pass, got: {output}"
     print("SUCCESS: User without password fails with clear error!")
 
 
@@ -318,25 +396,43 @@ def test_invalid_cookie_dir_fails(manual_test_dirs):
     """Test that specifying nonexistent cookie dir fails with clear error."""
     bitcoin_dir = manual_test_dirs["bitcoin"]
     lightning_dir = manual_test_dirs["lightning"]
+    rpcport = manual_test_dirs["rpcport"]
+    p2p_port = manual_test_dirs["p2p_port"]
 
-    print(f"\nStarting bitcoind in {bitcoin_dir}")
+    print(f"\nStarting bitcoind in {bitcoin_dir} (rpcport={rpcport})")
     subprocess.Popen(
         [
             "bitcoind",
             "-regtest",
             f"-datadir={bitcoin_dir}",
+            f"-rpcport={rpcport}",
+            f"-port={p2p_port}",
             "-fallbackfee=0.0001",
             "-daemon",
         ],
     )
-    assert wait_for_bitcoind(bitcoin_dir), "bitcoind failed to start"
+    assert wait_for_bitcoind(bitcoin_dir, rpcport), "bitcoind failed to start"
 
     subprocess.run(
-        ["bitcoin-cli", "-regtest", f"-datadir={bitcoin_dir}", "createwallet", "test"],
+        [
+            "bitcoin-cli",
+            "-regtest",
+            f"-datadir={bitcoin_dir}",
+            f"-rpcport={rpcport}",
+            "createwallet",
+            "test",
+        ],
         capture_output=True,
     )
     subprocess.run(
-        ["bitcoin-cli", "-regtest", f"-datadir={bitcoin_dir}", "-generate", "101"],
+        [
+            "bitcoin-cli",
+            "-regtest",
+            f"-datadir={bitcoin_dir}",
+            f"-rpcport={rpcport}",
+            "-generate",
+            "101",
+        ],
         capture_output=True,
     )
 
@@ -348,6 +444,7 @@ def test_invalid_cookie_dir_fails(manual_test_dirs):
                 "--network=regtest",
                 f"--lightning-dir={lightning_dir}",
                 f"--bitcoin-datadir={bitcoin_dir}",
+                f"--bitcoin-rpcport={rpcport}",
                 f"--plugin={COMPILED_PATH}",
                 "--smaug_brpc_cookie_dir=/nonexistent/path",
             ],
@@ -364,9 +461,9 @@ def test_invalid_cookie_dir_fails(manual_test_dirs):
             output += e.stderr.decode()
 
     print(f"lightningd output: {output}")
-    assert "nonexistent" in output.lower() or "cookie" in output.lower(), (
-        f"Expected error about nonexistent cookie file, got: {output}"
-    )
+    assert (
+        "nonexistent" in output.lower() or "cookie" in output.lower()
+    ), f"Expected error about nonexistent cookie file, got: {output}"
     print("SUCCESS: Invalid cookie dir fails with clear error!")
 
 
@@ -377,6 +474,9 @@ def test_standard_cookie_path_detection(manual_test_dirs):
     Creates a temporary .bitcoin directory and sets HOME to point to it.
     """
     lightning_dir = manual_test_dirs["lightning"]
+    rpcport = manual_test_dirs["rpcport"]
+    p2p_port = manual_test_dirs["p2p_port"]
+    ln_port = manual_test_dirs["ln_port"]
     log_file = Path(lightning_dir) / "lightningd.log"
 
     fake_home = tempfile.mkdtemp(prefix="smaug-test-home-")
@@ -392,6 +492,8 @@ def test_standard_cookie_path_detection(manual_test_dirs):
                 "bitcoind",
                 "-regtest",
                 f"-datadir={fake_bitcoin_dir}",
+                f"-rpcport={rpcport}",
+                f"-port={p2p_port}",
                 "-fallbackfee=0.0001",
                 "-daemon",
             ],
@@ -410,6 +512,7 @@ def test_standard_cookie_path_detection(manual_test_dirs):
                 "bitcoin-cli",
                 "-regtest",
                 f"-datadir={fake_bitcoin_dir}",
+                f"-rpcport={rpcport}",
                 "createwallet",
                 "test",
             ],
@@ -420,6 +523,7 @@ def test_standard_cookie_path_detection(manual_test_dirs):
                 "bitcoin-cli",
                 "-regtest",
                 f"-datadir={fake_bitcoin_dir}",
+                f"-rpcport={rpcport}",
                 "-generate",
                 "101",
             ],
@@ -436,14 +540,22 @@ def test_standard_cookie_path_detection(manual_test_dirs):
                 "--network=regtest",
                 f"--lightning-dir={lightning_dir}",
                 f"--bitcoin-datadir={fake_bitcoin_dir}",
+                f"--bitcoin-rpcport={rpcport}",
+                f"--addr=0.0.0.0:{ln_port}",
+                "--disable-plugin=cln-grpc",
                 f"--plugin={COMPILED_PATH}",
+                f"--smaug_brpc_port={rpcport}",
                 "--daemon",
                 f"--log-file={log_file}",
             ],
             env=env,
         )
 
-        assert wait_for_lightningd(lightning_dir), "lightningd failed to start"
+        if not wait_for_lightningd(lightning_dir):
+            # Print log file for debugging
+            if log_file.exists():
+                print(f"=== lightningd.log ===\n{log_file.read_text()}\n===")
+            assert False, "lightningd failed to start"
 
         result = subprocess.run(
             [
@@ -459,11 +571,13 @@ def test_standard_cookie_path_detection(manual_test_dirs):
 
         print(f"smaug ls output: {result.stdout}")
         assert result.returncode == 0, f"smaug ls failed: {result.stderr}"
-        assert "not_configured" not in result.stdout, "smaug reports not configured"
+        assert (
+            "not_configured" not in result.stdout
+        ), "smaug reports not configured"
         print("SUCCESS: Standard cookie path detection works!")
 
     finally:
         stop_lightningd(lightning_dir)
-        stop_bitcoind(str(fake_bitcoin_dir))
+        stop_bitcoind(str(fake_bitcoin_dir), rpcport)
         time.sleep(1)
         shutil.rmtree(fake_home, ignore_errors=True)

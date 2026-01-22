@@ -131,25 +131,26 @@ To further set up your environment for development we need to install some Pytho
 #### Install Python packages
 ```
 cd tests
-poetry shell
-poetry install --no-root
+uv sync
 ```
 
-#### Install the pre-commit Git hook
+#### Install the pre-commit Git hook (one-time setup)
 ```
+uv tool install pre-commit
 pre-commit install
 ```
 
-The [pre-commit](https://pre-commit.com/) Git hook will enforce code formatting and linting on the Python code utilizing the [black](https://black.readthedocs.io/en/stable/), [isort](https://pycqa.github.io/isort/), and [flake8](https://flake8.pycqa.org/en/latest/) packages every time you do a `git commit`. To trigger the hook manually simply run `pre-commit run --all-files`.
+The [pre-commit](https://pre-commit.com/) Git hook will enforce code formatting and linting on the Python code utilizing the [black](https://black.readthedocs.io/en/stable/), [isort](https://pycqa.github.io/isort/), and [flake8](https://flake8.pycqa.org/en/latest/) packages every time you do a `git commit`. Note that the hook only checks staged files. To check all Python files, run `pre-commit run --all-files`.
 
 ### Running the tests
 `smaug` is tested with `pytest` using the [pyln-testing](https://pypi.org/project/pyln-testing/) library.
 ```
-pytest
+cd tests
+uv run pytest
 ```
 
 > [!NOTE]
-> To be able to run the tests remember to first enter your development shell with `nix develop`, change into the the tests directory, and execute `poetry shell` if you haven't yet.
+> To be able to run the tests remember to first enter your development shell with `nix develop` and change into the tests directory.
 
 ## Feedback
 Please [open an issue](https://github.com/chrisguida/smaug/issues/new/choose) if you have any questions or comments!
