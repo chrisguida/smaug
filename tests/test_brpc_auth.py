@@ -544,6 +544,7 @@ def test_standard_cookie_path_detection(manual_test_dirs):
                 f"--addr=0.0.0.0:{ln_port}",
                 "--disable-plugin=cln-grpc",
                 f"--plugin={COMPILED_PATH}",
+                f"--smaug_brpc_port={rpcport}",
                 "--daemon",
                 f"--log-file={log_file}",
             ],
