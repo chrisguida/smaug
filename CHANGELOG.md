@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.4] 2026-01-21
+
+### Added
+
+- Bitcoind RPC credential auto-detection with 6-priority fallback chain
+- Graceful startup mode: plugin now starts without credentials and returns helpful error on RPC calls
+- New `src/brpc_auth.rs` module for credential detection logic
+- Support for reading credentials from CLN's `listconfigs` RPC
+- Support for parsing `~/.bitcoin/bitcoin.conf` with network-specific sections
+- Comprehensive tests for credential detection scenarios
+
+### Fixed
+
+- Plugin no longer crashes when bitcoind credentials are not configured
+- Correct cookie file paths for all networks (mainnet, testnet, regtest, signet)
+
 ## [0.1.3] 2026-01-21
 
 ### Changed
