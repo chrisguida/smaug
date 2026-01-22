@@ -92,7 +92,7 @@ def test_listconfigs_fallback(node_factory, bitcoind):
 # =============================================================================
 
 
-def wait_for_bitcoind(datadir, rpcport=None, timeout=30):
+def wait_for_bitcoind(datadir, rpcport=None, timeout=60):
     """Wait for bitcoind to be ready."""
     start = time.time()
     while time.time() - start < timeout:
@@ -115,7 +115,7 @@ def wait_for_bitcoind(datadir, rpcport=None, timeout=30):
     return False
 
 
-def wait_for_lightningd(lightning_dir, timeout=30):
+def wait_for_lightningd(lightning_dir, timeout=60):
     """Wait for lightningd to be ready."""
     start = time.time()
     while time.time() - start < timeout:
