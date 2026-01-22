@@ -70,7 +70,9 @@ def test_explicit_smaug_config(node_factory, bitcoind):
     result = l1.rpc.call("smaug", ["ls"])
 
     assert isinstance(result, dict)
-    assert "error" not in result or "not_configured" not in result.get("error", "")
+    assert "error" not in result or "not_configured" not in result.get(
+        "error", ""
+    )
 
 
 def test_listconfigs_fallback(node_factory, bitcoind):
@@ -88,7 +90,9 @@ def test_listconfigs_fallback(node_factory, bitcoind):
     result = l1.rpc.call("smaug", ["ls"])
 
     assert isinstance(result, dict)
-    assert "error" not in result or "not_configured" not in result.get("error", "")
+    assert "error" not in result or "not_configured" not in result.get(
+        "error", ""
+    )
 
 
 # =============================================================================
@@ -181,7 +185,7 @@ def stop_lightningd(lightning_dir):
 
 @pytest.fixture
 def manual_test_dirs():
-    """Create temporary directories and allocate unique ports for manual testing."""
+    """Create temp directories and allocate unique ports for manual tests."""
     bitcoin_dir = tempfile.mkdtemp(prefix="smaug-test-bitcoin-")
     lightning_dir = tempfile.mkdtemp(prefix="smaug-test-lightning-")
     rpcport = get_free_port()
@@ -216,7 +220,7 @@ def test_cookie_file_auth(manual_test_dirs):
     log_file = Path(lightning_dir) / "lightningd.log"
 
     # Start bitcoind without rpcuser/rpcpassword (uses cookie auth)
-    print(f"\nStarting bitcoind with cookie auth in {bitcoin_dir} (rpcport={rpcport})")
+    print(f"\nStarting bitcoind (cookie auth) in {bitcoin_dir}")
     subprocess.Popen(
         [
             "bitcoind",
@@ -296,7 +300,9 @@ def test_cookie_file_auth(manual_test_dirs):
 
     print(f"smaug ls output: {result.stdout}")
     assert result.returncode == 0, f"smaug ls failed: {result.stderr}"
-    assert "not_configured" not in result.stdout, "smaug reports not configured"
+    assert (
+        "not_configured" not in result.stdout
+    ), "smaug reports not configured"
     print("SUCCESS: Cookie file authentication works!")
 
 
@@ -470,9 +476,7 @@ def test_standard_cookie_path_detection(manual_test_dirs):
     try:
         (fake_bitcoin_dir / "bitcoin.conf").write_text("")
 
-        print(
-            f"\nStarting bitcoind in fake home: {fake_bitcoin_dir} (rpcport={rpcport})"
-        )
+        print(f"\nStarting bitcoind in fake home: {fake_bitcoin_dir}")
         subprocess.Popen(
             [
                 "bitcoind",
@@ -550,7 +554,9 @@ def test_standard_cookie_path_detection(manual_test_dirs):
 
         print(f"smaug ls output: {result.stdout}")
         assert result.returncode == 0, f"smaug ls failed: {result.stderr}"
-        assert "not_configured" not in result.stdout, "smaug reports not configured"
+        assert (
+            "not_configured" not in result.stdout
+        ), "smaug reports not configured"
         print("SUCCESS: Standard cookie path detection works!")
 
     finally:
