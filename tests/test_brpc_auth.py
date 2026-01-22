@@ -284,7 +284,11 @@ def test_cookie_file_auth(manual_test_dirs):
         stderr=subprocess.PIPE,
     )
 
-    assert wait_for_lightningd(lightning_dir), "lightningd failed to start"
+    if not wait_for_lightningd(lightning_dir):
+        # Print log file for debugging
+        if log_file.exists():
+            print(f"=== lightningd.log ===\n{log_file.read_text()}\n===")
+        assert False, "lightningd failed to start"
 
     result = subprocess.run(
         [
@@ -538,7 +542,11 @@ def test_standard_cookie_path_detection(manual_test_dirs):
             env=env,
         )
 
-        assert wait_for_lightningd(lightning_dir), "lightningd failed to start"
+        if not wait_for_lightningd(lightning_dir):
+            # Print log file for debugging
+            if log_file.exists():
+                print(f"=== lightningd.log ===\n{log_file.read_text()}\n===")
+            assert False, "lightningd failed to start"
 
         result = subprocess.run(
             [
