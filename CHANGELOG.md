@@ -16,6 +16,11 @@
 - Plugin no longer crashes when bitcoind credentials are not configured
 - Correct cookie file paths for all networks (mainnet, testnet, regtest, signet)
 
+### Changed
+
+- (docs) Update README to use uv instead of poetry for development setup
+- (tests) Add pre-commit to dev dependencies
+
 ## [0.1.3] 2026-01-21
 
 ### Changed
