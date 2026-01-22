@@ -18,7 +18,6 @@ Detection priority order:
 
 import os
 import shutil
-import socket
 import subprocess
 import tempfile
 import time
@@ -26,15 +25,7 @@ from pathlib import Path
 
 import pytest
 from pyln.testing.fixtures import *  # noqa: F401, F403
-from pyln.testing.utils import BITCOIND_CONFIG
-
-
-def get_free_port():
-    """Get a free port number."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("", 0))
-        return s.getsockname()[1]
-
+from pyln.testing.utils import BITCOIND_CONFIG, reserve_unused_port
 
 # Define utility paths
 RUST_PROFILE = os.environ.get("RUST_PROFILE", "debug")
@@ -188,9 +179,9 @@ def manual_test_dirs():
     """Create temp directories and allocate unique ports for manual tests."""
     bitcoin_dir = tempfile.mkdtemp(prefix="smaug-test-bitcoin-")
     lightning_dir = tempfile.mkdtemp(prefix="smaug-test-lightning-")
-    rpcport = get_free_port()
-    p2p_port = get_free_port()
-    ln_port = get_free_port()
+    rpcport = reserve_unused_port()
+    p2p_port = reserve_unused_port()
+    ln_port = reserve_unused_port()
 
     yield {
         "bitcoin": bitcoin_dir,
